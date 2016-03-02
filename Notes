@@ -1,8 +1,12 @@
-[ ] Find out why the postprocessing doesn't work with the stereoscopy
-[ ] Change 'for' loop to 'while' in loaders
-[ ] Find a way to influence quality when frame rate is too low
-[ ] Fix manifest creation - crash when folder as no extension
-[ ] Test VR Implementation
-[ ] Do global event with a pubsub
-[ ] Get loader progress
-[ ] Fix sound spatialization
+[ ] Add some midi stuff
+[ ] Add more comments
+[ ] Enable preprocess data
+
+GUI
+[ ] Add sequance handle sequence
+[ ] Add key handle
+[x] Add type for key
+[ ] Add sequences
+[ ] Add playback rate controls
+[x] Add button show waveform
+[ ] Fix key resize

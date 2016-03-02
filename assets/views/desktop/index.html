@@ -4,16 +4,16 @@
 <head>
     <meta charset="utf-8">
     <meta name="description" content="">
-    <title></title>
+    <title>Beats Editor</title>
 </head>
 
 <body>
+
 	<div class="container graph-keys">
-		<div class="wrapper">
-			<div class="container-name">Value by time /
-				<span> kick</span>
-			</div>
-			<div class="grid"></div>
+		<div class="container-name">Value by time /
+			<span>Kick</span>
+		</div>
+		<div class="grid">
 			<canvas></canvas>
 		</div>
 	</div>
@@ -25,6 +25,7 @@
 			<div class="meter">
 				<div class="level"></div>
 				<div class="threshold"></div>
+				<div class="callback">CB</div>
 			</div>
 			<div class="circle"></div>
 		</div>
@@ -33,26 +34,28 @@
 	<div class="container graph-spectrum">
 		<div class="container-name">Spectrum and waveform /
 			<span>main analyser</span>
+			<span class="button-waveform">Show waveform</span>
 		</div>
-		<div class="grid"></div>
-		<div class="keys">
-			<div class="template">
-				<div class="name"></div>
-			</div>
+		<div class="grid">
+			<canvas></canvas>
 		</div>
-
-		<canvas> </canvas>
-
+		<div class="template">
+			<div class="name"></div>
+			<div class="handle"></div>
+		</div>
 	</div>
+
 	<div class="container track">
-		<canvas></canvas>
-		<div class="container-name">Sequencer</div>
+		<div class="container-name">Sequencer  /
+			<span>Buffer not load or loading</span>
+		</div>
 		<div class="template">
 			<div class="name"></div>
 			<div class="value mono">0.000</div>
 		</div>
 		<div class="sequences">
-			<div class="sequence progress ">
+			<canvas></canvas>
+			<div class="sequence progress">
 				<div class="value mono time">0.000</div>
 			</div>
 		</div>

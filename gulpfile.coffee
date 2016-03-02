@@ -41,11 +41,11 @@ server = nodemon {
 ## Browserify
 
 entries =
-    engine : './assets/coffee/modules/Demo.coffee'
+    engine : './assets/coffee/modules/example.coffee'
 
 options =
 
-    entries    : './assets/coffee/modules/Demo.coffee'
+    entries    : './assets/coffee/modules/example.coffee'
     debug      : true
     transform  : ['coffeeify']
     extensions : ['.coffee']

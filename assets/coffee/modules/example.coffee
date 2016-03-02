@@ -1,5 +1,5 @@
 BEATS = require 'Beats'
-require 'Beats.GUI'
+require 'GUI'
 
 audioContext =  new AudioContext
 
@@ -11,7 +11,7 @@ url = 'audio/Walk.mp3'
 audio.src      = url
 audio.controls = true
 audio.autoplay = false
-audio.loop     = true
+# audio.loop     = true
 
 ready = false
 
@@ -20,18 +20,15 @@ audio.oncanplaythrough = ->
 	if @readyState != 4 || ready == true then return
 	ready = true
 
-	# Create media element source node
-	input = audioContext.createMediaElementSource audio
-	input.mediaElement.play()
-	input.mediaElement.currentTime = 28
+	context = new AudioContext
 
 	## Initialize Beats interface to handle Keys and Modulators
-	beats = new BEATS.Interface audioContext, input,
-		destination : audioContext.destination
+	beats = new BEATS.Interface context, audio,
+		destination : context.destination
 		fftSize     : 1024  ## Size of the Fast Fourier Transform
 		levelCount  : 128   ## Must be a power of two
 		mono        : false ## Down-mix from stereo to mono
-
+		buffered    : true  ## Get an audio buffer
 
 	beats.add new BEATS.Modulator 'lowpass', 440,
 		name   : 'lowpass'
@@ -98,6 +95,7 @@ audio.oncanplaythrough = ->
 			54
 			onStart : =>
 				beats.get( 'hit-hat' ).active = true
+				beats.get( 'piano' ).active   = true
 		]
 		[
 			82
@@ -111,13 +109,10 @@ audio.oncanplaythrough = ->
 		onChange  : -> console.log 'Sequence change'
 		sequences : sequences
 
-
 	beats.active = true
 
 	beatsGUI = new BEATS.GUI beats
-	sequencer.onChange = => beatsGUI.updateKeys()
-
-
+	sequencer.onChange = => beatsGUI.update()
 
 	## Update loop
 	startTime = performance.now()

@@ -3,10 +3,15 @@ module.exports = BEATS
 
 class BEATS.Interface
 
-	constructor: (@context, @input, parameters) ->
+	constructor: (@context, audio, parameters) ->
 
 		@keys       = []
 		@modulators = []
+
+		@input = @context.createMediaElementSource audio
+
+		## Load source to an audio buffer
+		if parameters.buffered then @loadBuffer audio.src
 
 		## Default analyser
 		@analyser = @context.createAnalyser()
@@ -20,6 +25,8 @@ class BEATS.Interface
 		## Connect the analyser to the destination
 		@destination = parameters.destination
 		if @destination?
+
+			## Connect analyser to the audio context destination
 			@analyser.connect @destination
 
 			## Set the analyser as output
@@ -33,6 +40,7 @@ class BEATS.Interface
 		@analyser.frequencyData  = new Uint8Array @analyser.frequencyBinCount
 		@analyser.timeDomainData = new Uint8Array @analyser.frequencyBinCount
 
+		## Create typed array to store normalized data
 		@analyser.normalizedFrequencyData  = new Float32Array @analyser.frequencyBinCount
 		@analyser.normalizedTimeDomainData = new Float32Array @analyser.frequencyBinCount
 
@@ -45,7 +53,7 @@ class BEATS.Interface
 
 	setLevelCount: (levelCount) ->
 
-		## Create typed array to store data
+		## Create typed array to store data, with a length equal to level count
 		@levelCount      = levelCount
 		@levelStep       = @analyser.frequencyBinCount / @levelCount
 		@analyser.levels = new Float32Array @levelCount
@@ -54,22 +62,43 @@ class BEATS.Interface
 
 		if audioBuffer.numberOfChannels = 2
 
+			## Get each audio buffer's channel
 			leftChannel  = audioBuffer.getChannelData 0
 			rightChannel = audioBuffer.getChannelData 1
 
 			i = audioBuffer.length
 			while i--
 
+				## Get the average
 				mixedChannel = 0.5 * ( leftChannel[ i ] + rightChannel[ i ] )
 				leftChannel[ i ] = rightChannel[ i ] = mixedChannel
 
+			audioBuffer.numberOfChannels = 1
+
+	loadBuffer: (url) ->
+
+		request = new XMLHttpRequest()
+		request.open "GET", url, true
+		request.responseType = "arraybuffer"
+
+		onSuccess = (buffer) => @buffer = buffer
+		onError   = -> console.log 'Error decoding the file ' + error
+
+		request.onload = =>
+
+			## If the request succeed, decode audio data
+			@context.decodeAudioData request.response, onSuccess, onError
+
+		request.onerror = (error) -> console.log 'Error loading the file' + error
+		request.send()
+
 	getSpectrum: (analyser, normalized) =>
 
-		## Raw data
+		## Get raw data
 		analyser.getByteFrequencyData analyser.frequencyData
 		spectrum = analyser.frequencyData
 
-		## Get normalized values
+		## Compute normalized values
 		if normalized
 
 			i = analyser.frequencyData.length
@@ -78,7 +107,7 @@ class BEATS.Interface
 
 			spectrum = analyser.normalizedFrequencyData
 
-		## Get sampled values
+		## Compute sampled values
 		if @levelCount?
 
 			i = @levelCount
@@ -96,10 +125,11 @@ class BEATS.Interface
 
 	getWaveform: (analyser, normalized) ->
 
+		## Get raw data
 		analyser.getByteTimeDomainData analyser.timeDomainData
 		waveform = analyser.timeDomainData
 
-		## Get normalized values
+		## Compute normalized values
 		if normalized
 
 			i = analyser.timeDomainData.length
@@ -142,18 +172,27 @@ class BEATS.Interface
 
 			if !object.name? then modulator.name = 'M' + @modulators.length
 
+			## The context is needed to create a filter and an analyser
 			object.context = @context
 			object.set()
+
+			## Create a typed array to receive normalized data
 			object.analyser.levels = new Float32Array @levelCount
+
+			## Update the modulator analyser once when added
+			@getSpectrum object.analyser, true
+			@getWaveform object.analyser, true
 
 			@input.connect object.filter
 
+			## Add modulator to the interface
 			@modulators[ @modulators.length++ ] = object
 
 		if object instanceof BEATS.Key
 
 			if !object.name? then object.name = 'K' + @keys.length
 
+			## Add key to the interface
 			@keys[ @keys.length++ ] = object
 
 		if object instanceof BEATS.Sequencer
@@ -166,29 +205,38 @@ class BEATS.Interface
 
 				if !names[ i ]? then names[ i ] = "S" + i
 
+			## Add sequencer to the interface
 			@sequencer = object
 
 	remove: (object) ->
 
+		## Find the object type
 		switch object.constructor.name
 
 			when 'Modulator' then objects = @modulators
 			when 'Key' then objects = @keys
 			when 'Sequencer' then objects = @sequencer
-			else console.log ''
+			else
 
+				console.log 'Unknown object type'
+				return
+
+		## Find the object according to type
 		i = objects.length
 		while i--
 			if objects[ i ] == object then objects.splice i, 1
 
 	get: (name) ->
 
+		## Get object by name
 		if typeof name == 'string'
 
+			## Loop through keys
 			i = @keys.length
 			while i--
 				if @keys[ i ].name == name then return @keys[ i ]
 
+			## Loop through modulators
 			i = @modulators.length
 			while i--
 				if @modulators[ i ].name == name then return @modulators[ i ]
@@ -215,6 +263,7 @@ class BEATS.Interface
 			if !modulator.active then continue
 
 			analyser = modulator.analyser
+
 			@getSpectrum analyser, true
 			@getWaveform analyser, true
 
@@ -246,43 +295,39 @@ class BEATS.Interface
 		## Update sequencer with current time
 		if @sequencer? then @sequencer.update @currentTime
 
-
 class BEATS.Modulator
 
 	constructor: (type, frequency, parameters) ->
 
+		## Filter property
 		@type      = type
 		@frequency = frequency
+		@Q         = parameters.Q
+		@gain      = parameters.gain
 
+		## Modulator property
 		@name   = parameters.name
 		@active = parameters.active
 
-		@Q    = parameters.Q
-		@gain = parameters.gain
-
 	set: (frequency, Q, gain) ->
 
+		## Create necessary nodes
 		@filter   = @context.createBiquadFilter()
-		@volume   = @context.createGain()
 		@analyser = @context.createAnalyser()
+		@filter.connect @analyser
 
-		@filter.connect @volume
-		@volume.connect @analyser
-
+		## Create typed array to store data
 		@analyser.frequencyData  = new Uint8Array @analyser.frequencyBinCount
 		@analyser.timeDomainData = new Uint8Array @analyser.frequencyBinCount
 
+		## Create typed array to store normalized data
 		@analyser.normalizedFrequencyData  = new Float32Array @analyser.frequencyBinCount
 		@analyser.normalizedTimeDomainData = new Float32Array @analyser.frequencyBinCount
 
 		@filter.type            = @type
 		@filter.frequency.value = @frequency
-
-		if @filter.Q? and @Q?
-			@filter.Q.value = @Q
-
-		if @filter.gain? and @gain?
-			@filter.gain.value = @gain
+		if @filter.Q? and @Q? then @filter.Q.value = @Q
+		if @filter.gain? and @gain? then @filter.gain.value = @gain
 
 class BEATS.Key
 
@@ -322,7 +367,7 @@ class BEATS.Key
 			@value = 0
 			return
 
-		## Compute value
+		## Compute value according to parameters
 		value = ( frequency - @min ) / ( @max - @min )
 
 		## Constricts value
@@ -342,7 +387,6 @@ class BEATS.Key
 			@lower   = false
 
 			if @callback? then @callback()
-
 
 class BEATS.Sequencer
 
