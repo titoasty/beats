@@ -1,6 +1,7 @@
 BEATS = {}
 module.exports = BEATS
 
+
 class BEATS.Interface
 
 	constructor: ( @context, audio, parameters ) ->
@@ -69,26 +70,6 @@ class BEATS.Interface
 		@levelCount      = levelCount
 		@levelStep       = @analyser.frequencyBinCount / @levelCount
 		@analyser.levels = new Float32Array( @levelCount )
-
-	stereoToMono: ( audioBuffer ) ->
-
-		buffer = audioBuffer
-		if buffer.numberOfChannels = 2
-
-			## Get each audio buffer's channel
-			leftChannel  = buffer.getChannelData( 0 )
-			rightChannel = buffer.getChannelData( 1 )
-
-			i = buffer.length
-			while i--
-
-				## Get the average
-				mixedChannel = 0.5 * ( leftChannel[ i ] + rightChannel[ i ] )
-				leftChannel[ i ] = rightChannel[ i ] = mixedChannel
-
-			buffer.numberOfChannels = 1
-
-		return buffer
 
 	loadBuffer: ( url ) ->
 
@@ -401,6 +382,7 @@ class BEATS.Interface
 				## Call interface on phase change event
 				@onPhaseChange?()
 
+
 class BEATS.Modulator
 
 	constructor: ( type, frequency, parameters ) ->
@@ -435,6 +417,7 @@ class BEATS.Modulator
 
 		@filter.Q.value    = @Q if @filter.Q? and @Q?
 		@filter.gain.value = @gain if @filter.gain? and @gain?
+
 
 class BEATS.Key
 
@@ -496,6 +479,7 @@ class BEATS.Key
 
 			@callback() if @callback?
 
+
 class BEATS.Phase
 
 	constructor: ( @time, @values, parameters ) ->
@@ -540,6 +524,7 @@ class BEATS.Phase
 
 			i++
 
+
 class BEATS.BPMProcessor
 
 	constructor: ( buffer ) ->
@@ -578,8 +563,8 @@ class BEATS.BPMProcessor
 		peaks = []
 
 		## Track a threshold volume level
-		min = @getMin( data )
-		max = @getMax( data )
+		min = BEATS.Utils.getArrayMin( data )
+		max = BEATS.Utils.getArrayMax( data )
 
 		threshold = min + ( max - min )
 
@@ -597,26 +582,6 @@ class BEATS.BPMProcessor
 
 		tempos.sort( ( a, b ) -> b.count - a.count )
 		@onProcessEnd?( tempos[ 0 ].tempo )
-
-	getMin: ( data ) =>
-
-		min = Infinity
-
-		i = data.length
-		while i--
-			min = data[ i ] if data[ i ] < min
-
-		return min
-
-	getMax: ( data ) =>
-
-		max = -Infinity
-
-		i = data.length
-		while i--
-			max = data[ i ] if data[ i ] > max
-
-		return max
 
 	getPeaksAtThreshold: ( data, threshold ) ->
 
@@ -685,3 +650,46 @@ class BEATS.BPMProcessor
 					count : count.count
 
 		return results
+
+
+BEATS.Utils =
+
+	getArrayMin: ( data ) ->
+
+		min = Infinity
+
+		i = data.length
+		while i--
+			min = data[ i ] if data[ i ] < min
+
+		return min
+
+	getArrayMax: ( data ) ->
+
+		max = -Infinity
+
+		i = data.length
+		while i--
+			max = data[ i ] if data[ i ] > max
+
+		return max
+
+	stereoToMono: ( audioBuffer ) ->
+
+		buffer = audioBuffer
+		if buffer.numberOfChannels = 2
+
+			## Get each audio buffer's channel
+			leftChannel  = buffer.getChannelData( 0 )
+			rightChannel = buffer.getChannelData( 1 )
+
+			i = buffer.length
+			while i--
+
+				## Get the average
+				mixedChannel = 0.5 * ( leftChannel[ i ] + rightChannel[ i ] )
+				leftChannel[ i ] = rightChannel[ i ] = mixedChannel
+
+			buffer.numberOfChannels = 1
+
+		return buffer
