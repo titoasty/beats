@@ -59,8 +59,7 @@ module.exports = class Outcome
 			button.style.color = colors[ i ]
 
 			button.className = 'button-graph button'
-			# button.classList.add( 'active' ) if @keys[ i ].active
-			button.classList.add( 'active' )
+			button.classList.add( 'active' ) if @keys[ i ].active
 
 			@graphControls.appendChild( button )
 

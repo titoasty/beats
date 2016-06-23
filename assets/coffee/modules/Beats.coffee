@@ -363,14 +363,15 @@ class BEATS.Interface
 			@phases[ @position ].onUpdate?()
 
 			nextPhase = @phases[ @position + 1 ]
-			nextTime  = if next? then next.time else @duration
+			nextTime  = if nextPhase? then nextPhase.time else @duration
 
 			if @currentTime >= nextTime
 
 				## Call current phase end callback
 				@phases[ @position ].onComplete?()
 
-				return if !next?
+				## Return if it is the last phase
+				return if !nextPhase?
 
 				## Update position to switch to next phase
 				@position++
