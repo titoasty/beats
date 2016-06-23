@@ -1,0 +1,40 @@
+@keyframes delay {
+	0%, 40%, 100% {
+		transform: scaleY( 0.05 );
+	}  20% {
+		transform: scaleY( 1.0 );
+	}
+}
+
+.loader {
+	position: absolute;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	left: 0;
+	margin: auto;
+	width: 60px;
+	height: 30px;
+
+	text-align: center;
+	font-size: 10px;
+	z-index: 1;
+
+	$time: 1.2s;
+
+	.bar {
+		height: 100%;
+		width: 8px;
+		display: inline-block;
+		float: left;
+		margin-left: 2px;
+		background: white;
+		animation: delay $time infinite ease-in-out;
+
+		@for $i from 1 through 6 {
+		    &:nth-child( #{$i} ) {
+		    	animation-delay: -1 * $time + $i * 0.1s;
+		    }
+		}
+	}
+}

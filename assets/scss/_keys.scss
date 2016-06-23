@@ -1,0 +1,73 @@
+.key {
+    position: absolute;
+    z-index: 1;
+    top: 0;
+    left: 0;
+    transition: box-shadow 0.4s cubic-bezier( 0.55, 0, 0.1, 1 );
+    // opacity: .4;
+    box-shadow: 0 0 0 1px rgba( 255, 255, 255, 0.4 ) inset;
+
+    &:hover {
+        cursor: pointer;
+        box-shadow: 0 0 0 1px white inset;
+
+        .handle {
+            pointer-events: all !important;
+            opacity: 1;
+        }
+
+        .name {
+            opacity: 1;
+        }
+    }
+
+    &.active {
+        opacity: 1;
+    }
+
+    .handle {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        overflow: visible;
+        width: 0;
+        height: 0;
+        transition: opacity 0.4s cubic-bezier( 0.55, 0, 0.1, 1 );
+        pointer-events: none !important;
+        opacity: 0;
+
+        &:before,
+        &:after {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            content: '';
+            transform: translate( -50%, -50% );
+            border-radius: 50%;
+        }
+
+        &:before {
+            width: 20px;
+            height: 20px;
+            border: 1px solid white;
+        }
+
+        &:after {
+            width: 40px;
+            height: 40px;
+            background: transparent;
+        }
+    }
+
+    .name {
+        opacity: 0;
+        font-size: 13px;
+        position: absolute;
+        top: 10px;
+        right: -10px;
+        transform: translateX( 100% );
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        transition: opacity 0.4s cubic-bezier( 0.55, 0, 0.1, 1 );
+    }
+}

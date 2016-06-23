@@ -1,0 +1,105 @@
+.track {
+
+    &:after,
+    &:before {
+        content: '';
+        z-index: 1;
+        display: block;
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin: auto;
+        height: 110%;
+        width: 60px;
+        transition: opacity 200ms ease;
+    }
+
+    &:before {
+        left: 0;
+        background: linear-gradient(to left, rgba( $background-color, 0 ) 0%, rgba( $background-color, 1 ) 100%);
+    }
+
+    &:after {
+        right: 0;
+        background: linear-gradient(to right, rgba( $background-color, 0 ) 0%, rgba( $background-color, 1 ) 100%);
+    }
+
+
+    &.hide-left {
+        &:before {
+            opacity: 0;
+        }
+    }
+
+    &.hide-right {
+        &:after {
+            opacity: 0;
+        }
+    }
+}
+
+.sequences {
+    position: relative;
+    overflow: scroll;
+    cursor: crosshair;
+}
+
+.sequence {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 10px;
+    height: 100%;
+    margin: auto;
+    opacity: .9;
+    background: none;
+
+    .name {
+        font-size: 13px;
+        position: absolute;
+        bottom: 20px;
+        left: 10px;
+        display: none;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+    }
+
+    .value {
+        position: absolute;
+        bottom: 0;
+        left: 10px;
+    }
+
+    &.progress {
+        &:before {
+            background: white;
+        }
+
+        .value {
+            top: 5px;
+        }
+    }
+
+    &:before {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        width: 1px;
+        height: 100%;
+        margin: auto;
+        content: '';
+        background: rgba( white, 0.4 );
+    }
+}
+
+.beat {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    margin: auto;
+    height: 100%;
+    width: 1px;
+    background: rgba( white, 0.05 );
+    top: 0;
+}

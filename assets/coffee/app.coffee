@@ -10,7 +10,7 @@ MobileDetect = require 'mobile-detect'
 app    = express()
 server = http.Server app
 io     = socket server
-port   = process.env.PORT || 8080
+port   = 8081
 
 # --- CONFIGURATION
 

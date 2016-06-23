@@ -1,12 +1,5 @@
 [ ] Add some midi stuff
-[ ] Add more comments
-[ ] Enable preprocess data
+[ ] Rewrote bpm detection
 
 GUI
-[ ] Add sequance handle sequence
-[ ] Add key handle
-[x] Add type for key
-[ ] Add sequences
-[ ] Add playback rate controls
-[x] Add button show waveform
-[ ] Fix key resize
+[ ] Add filter vizualization

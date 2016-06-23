@@ -1,0 +1,44 @@
+audio {
+    width: calc( 100% - 70px );
+}
+
+audio::-webkit-media-controls-panel {
+    background: none;
+}
+
+audio::-webkit-media-controls-volume-slider,
+audio::-webkit-media-controls-timeline {
+    border: 1px solid rgba( 255, 255, 255, 0.2 );
+    -webkit-appearance: none;
+}
+
+audio::-webkit-media-controls-time-remaining-display,
+audio::-webkit-media-controls-current-time-display {
+    font-family: 'MaisonNeueMono';
+    font-size: 14px;
+    font-weight: lighter;
+    margin-right: 25px;
+}
+
+audio::-webkit-media-controls-mute-button {
+    display: none;
+}
+
+input[ type=range ] {
+    -webkit-appearance: none;
+}
+
+audio,
+.bpm {
+	display: inline-block;
+}
+
+.bpm {
+	height: 30px;
+	line-height: 32px;
+	vertical-align: top;
+	font-size: 14px;
+	letter-spacing: 1px;
+	width: 70px;
+	text-align: left;
+}

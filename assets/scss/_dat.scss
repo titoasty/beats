@@ -1,0 +1,99 @@
+.dg {
+    font-family: 'MaisonNeueLight' !important;
+    font-size: 13px;
+    z-index: 1 !important;
+    letter-spacing: 1px;
+
+    .ac {
+        height: 30%;
+    }
+
+    .a {
+        position: absolute;
+        top: 45px;
+        right: 5%;
+        padding: 20px;
+        margin: 0;
+        opacity: .9;
+        background: $background-color;
+        box-shadow: 0 1px 3px rgba( 0, 0, 0, 0.12 ), 0 1px 2px rgba(0, 0, 0, 0.24 );
+    }
+
+    .closed li.title {
+        border-bottom: 1px solid rgba( 255, 255, 255, 0.2 );
+        background-color: $background-color;
+        background-image: none;
+    }
+
+    .slider {
+        height: 25px;
+    }
+
+    .c input[ type=text ] {
+        margin-top: 4px;
+        padding: 6px 3px;
+    }
+
+    li {
+        &.title {
+            font-family: 'MaisonNeueBold' !important;
+            text-transform: uppercase;
+            border-bottom: 1px solid rgba( white, 0.5 );
+            background-color: $background-color;
+            background-image: none;
+        }
+
+        &:not(.folder) {
+            line-height: 34px;
+            height: 32px;
+            background: none;
+        }
+    }
+
+    select {
+        font-family: 'MaisonNeueLight';
+        font-size: 13px;
+        float: right;
+        height: 27px;
+        padding: 0 10px;
+        letter-spacing: 1px;
+        color: white;
+        border-radius: 0;
+        background: none;
+        -webkit-appearance: none;
+
+        &:focus {
+            outline: none;
+        }
+    }
+
+    .cr {
+        border-left: none !important;
+
+        &.boolean:hover {
+            background: #191919 !important;
+        }
+
+        &.function {
+            margin-bottom: 15px;
+            padding: 0;
+            transition: border 1s cubic-bezier( 0.55, 0, 0.1, 1 ), background 1s cubic-bezier( 0.55, 0, 0.1, 1 );
+            text-align: center;
+            border: 1px solid rgba( #5aaaff, 0.2 ) !important;
+            box-shadow: 0 3px 6px rgba( 0, 0, 0, 0.16 ), 0 3px 6px rgba( 0, 0, 0, 0.23 );
+
+            &:hover {
+                border: 1px solid rgba( #5aaaff, 1 ) !important;
+                background: #191919 !important;
+            }
+
+            span {
+                width: 100%;
+            }
+        }
+    }
+
+    .dg.main .close-button {
+        display: none;
+    }
+}

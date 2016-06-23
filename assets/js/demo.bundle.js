@@ -10,21 +10,20 @@ BEATS.Interface = (function() {
   function Interface(context, audio, parameters) {
     this.context = context;
     this.update = bind(this.update, this);
+    this.computeBPM = bind(this.computeBPM, this);
     this.getSpectrum = bind(this.getSpectrum, this);
     this.keys = [];
     this.modulators = [];
+    this.phases = [];
+    this.phases[0] = new BEATS.Phase(0);
+    this.position = 0;
     this.input = this.context.createMediaElementSource(audio);
-    if (parameters.buffered) {
-      this.loadBuffer(audio.src);
-    }
+    this.loadBuffer(audio.src);
     this.analyser = this.context.createAnalyser();
-    if (parameters.mono) {
-      this.input.channelCount = 1;
-    }
     this.input.connect(this.analyser);
     this.media = this.input.mediaElement;
     this.duration = this.media.duration;
-    this.active = false;
+    this.active = true;
     this.destination = parameters.destination;
     if (this.destination != null) {
       this.analyser.connect(this.destination);
@@ -45,6 +44,8 @@ BEATS.Interface = (function() {
     }
     this.getSpectrum(this.analyser, true);
     this.getWaveform(this.analyser, true);
+    this.onLoading = parameters.onLoading;
+    this.onProcessEnd = parameters.onProcessEnd;
   }
 
   Interface.prototype.setLevelCount = function(levelCount) {
@@ -54,17 +55,19 @@ BEATS.Interface = (function() {
   };
 
   Interface.prototype.stereoToMono = function(audioBuffer) {
-    var i, leftChannel, mixedChannel, rightChannel;
-    if (audioBuffer.numberOfChannels = 2) {
-      leftChannel = audioBuffer.getChannelData(0);
-      rightChannel = audioBuffer.getChannelData(1);
-      i = audioBuffer.length;
+    var buffer, i, leftChannel, mixedChannel, rightChannel;
+    buffer = audioBuffer;
+    if (buffer.numberOfChannels = 2) {
+      leftChannel = buffer.getChannelData(0);
+      rightChannel = buffer.getChannelData(1);
+      i = buffer.length;
       while (i--) {
         mixedChannel = 0.5 * (leftChannel[i] + rightChannel[i]);
         leftChannel[i] = rightChannel[i] = mixedChannel;
       }
-      return audioBuffer.numberOfChannels = 1;
+      buffer.numberOfChannels = 1;
     }
+    return buffer;
   };
 
   Interface.prototype.loadBuffer = function(url) {
@@ -74,19 +77,25 @@ BEATS.Interface = (function() {
     request.responseType = "arraybuffer";
     onSuccess = (function(_this) {
       return function(buffer) {
-        return _this.buffer = buffer;
+        _this.buffer = buffer;
+        return _this.computeBPM();
       };
     })(this);
     onError = function() {
-      return console.log('Error decoding the file ' + error);
+      throw new Error("Error decoding the file " + error);
     };
     request.onload = (function(_this) {
       return function() {
         return _this.context.decodeAudioData(request.response, onSuccess, onError);
       };
     })(this);
+    request.onprogress = (function(_this) {
+      return function(event) {
+        return typeof _this.onLoading === "function" ? _this.onLoading(event.loaded / event.total) : void 0;
+      };
+    })(this);
     request.onerror = function(error) {
-      return console.log('Error loading the file' + error);
+      throw new Error("Error loading the file" + error);
     };
     return request.send();
   };
@@ -131,10 +140,10 @@ BEATS.Interface = (function() {
   };
 
   Interface.prototype.getFrequency = function(spectrum, start, end) {
-    var i, j, ref, ref1, sum;
+    var i, k, ref, ref1, sum;
     if (end - start > 1) {
       sum = 0;
-      for (i = j = ref = start, ref1 = end; ref <= ref1 ? j <= ref1 : j >= ref1; i = ref <= ref1 ? ++j : --j) {
+      for (i = k = ref = start, ref1 = end; ref <= ref1 ? k <= ref1 : k >= ref1; i = ref <= ref1 ? ++k : --k) {
         sum += spectrum[i];
       }
       return sum / (end - start + 1);
@@ -144,12 +153,12 @@ BEATS.Interface = (function() {
   };
 
   Interface.prototype.getMaxFrequency = function(spectrum, start, end) {
-    var i, j, max, ref, ref1;
+    var i, k, max, ref, ref1;
     max = 0;
     if (end == null) {
       end = start;
     }
-    for (i = j = ref = start, ref1 = end; ref <= ref1 ? j <= ref1 : j >= ref1; i = ref <= ref1 ? ++j : --j) {
+    for (i = k = ref = start, ref1 = end; ref <= ref1 ? k <= ref1 : k >= ref1; i = ref <= ref1 ? ++k : --k) {
       if (spectrum[i] > max) {
         max = spectrum[i];
       }
@@ -157,11 +166,22 @@ BEATS.Interface = (function() {
     return max;
   };
 
+  Interface.prototype.computeBPM = function() {
+    this.BPMProcessor = new BEATS.BPMProcessor(this.buffer);
+    this.BPMProcessor.onProcessEnd = (function(_this) {
+      return function(result) {
+        _this.bpm = result;
+        return _this.onProcessEnd() != null;
+      };
+    })(this);
+    return this.BPMProcessor.start();
+  };
+
   Interface.prototype.add = function(object) {
-    var i, j, names, ref;
+    var i, key, modulator, name, parameter, results1, value, values;
     if (object instanceof BEATS.Modulator) {
       if (object.name == null) {
-        modulator.name = 'M' + this.modulators.length;
+        modulator.name = 'M|' + this.modulators.length;
       }
       object.context = this.context;
       object.set();
@@ -173,25 +193,72 @@ BEATS.Interface = (function() {
     }
     if (object instanceof BEATS.Key) {
       if (object.name == null) {
-        object.name = 'K' + this.keys.length;
+        object.name = 'K|' + this.keys.length;
       }
+      object.index = this.keys.length;
       this.keys[this.keys.length++] = object;
     }
-    if (object instanceof BEATS.Sequencer) {
-      object.time = this.media.currentTime;
-      object.duration = this.media.duration;
-      names = object.names;
-      for (i = j = 0, ref = names.length; 0 <= ref ? j < ref : j > ref; i = 0 <= ref ? ++j : --j) {
-        if (names[i] == null) {
-          names[i] = "S" + i;
+    if (object instanceof BEATS.Phase) {
+      this.phases[this.phases.length++] = object;
+      this.phases.sort((function(_this) {
+        return function(a, b) {
+          if (a.time > b.time) {
+            return 1;
+          }
+          if (a.time < b.time) {
+            return -1;
+          }
+          return 0;
+        };
+      })(this));
+      object.keys = this.keys;
+      object.modulators = this.modulators;
+      object.phases = this.phases;
+      i = this.phases.length;
+      while (i--) {
+        this.phases[i].index = i;
+      }
+    }
+    this.phases[0].keys = this.keys;
+    this.phases[0].modulators = this.modulators;
+    this.phases[0].phases = this.phases;
+    i = this.keys.length;
+    while (i--) {
+      key = this.keys[i];
+      values = this.phases[0].values[key.name] = {};
+      for (name in key) {
+        value = key[name];
+        if (typeof value !== "function") {
+          values[name] = value;
         }
       }
-      return this.sequencer = object;
     }
+    i = this.modulators.length;
+    results1 = [];
+    while (i--) {
+      modulator = this.modulators[i];
+      values = this.phases[0].values[modulator.name] = {};
+      values.active = modulator.active;
+      results1.push((function() {
+        var ref, results2;
+        ref = modulator.filter;
+        results2 = [];
+        for (name in ref) {
+          parameter = ref[name];
+          if (name === 'frequency' || name === 'Q' || name === 'gain') {
+            results2.push(values[name] = parameter.value);
+          } else {
+            results2.push(void 0);
+          }
+        }
+        return results2;
+      })());
+    }
+    return results1;
   };
 
   Interface.prototype.remove = function(object) {
-    var i, objects, results;
+    var i, objects, results1;
     switch (object.constructor.name) {
       case 'Modulator':
         objects = this.modulators;
@@ -203,19 +270,19 @@ BEATS.Interface = (function() {
         objects = this.sequencer;
         break;
       default:
-        console.log('Unknown object type');
+        throw new Error('Unknown object type');
         return;
     }
     i = objects.length;
-    results = [];
+    results1 = [];
     while (i--) {
       if (objects[i] === object) {
-        results.push(objects.splice(i, 1));
+        results1.push(objects.splice(i, 1));
       } else {
-        results.push(void 0);
+        results1.push(void 0);
       }
     }
-    return results;
+    return results1;
   };
 
   Interface.prototype.get = function(name) {
@@ -234,12 +301,12 @@ BEATS.Interface = (function() {
         }
       }
     } else {
-
+      throw new Error("Can't find object named : " + name);
     }
   };
 
   Interface.prototype.update = function() {
-    var analyser, frequency, i, key, modulator, spectrum;
+    var analyser, base, base1, base2, frequency, i, key, modulator, next, spectrum;
     if ((this.media == null) || this.media.paused || !this.active) {
       return;
     }
@@ -276,8 +343,25 @@ BEATS.Interface = (function() {
       }
       key.update(frequency);
     }
-    if (this.sequencer != null) {
-      return this.sequencer.update(this.currentTime);
+    if (this.phases.length > 0) {
+      if (typeof (base = this.phases[this.position]).onUpdate === "function") {
+        base.onUpdate();
+      }
+      next = this.phases[this.position + 1];
+      if (next == null) {
+        return;
+      }
+      if (this.currentTime >= next.time) {
+        if (typeof (base1 = this.phases[this.position]).onComplete === "function") {
+          base1.onComplete();
+        }
+        this.position++;
+        this.phases[this.position].initialize();
+        if (typeof (base2 = this.phases[this.position]).onStart === "function") {
+          base2.onStart();
+        }
+        return typeof this.onPhaseChange === "function" ? this.onPhaseChange() : void 0;
+      }
     }
   };
 
@@ -320,12 +404,12 @@ BEATS.Modulator = (function() {
 BEATS.Key = (function() {
   function Key(start, end, min, max, parameters) {
     this.update = bind(this.update, this);
-    this.set(start, end, min, max);
     if (parameters == null) {
       parameters = {};
     }
+    this.set(start, end, min, max);
     this.value = 0;
-    this.friction = parameters.friction;
+    this.smoothness = parameters.smoothness || 1;
     this.delay = parameters.delay;
     this.timeout = null;
     this.lower = true;
@@ -335,16 +419,22 @@ BEATS.Key = (function() {
     this.name = parameters.name;
     this.modulator = parameters.modulator || null;
     this.active = parameters.active;
-    if (parameters.callback != null) {
-      this.callback = parameters.callback;
-    }
+    this.callback = parameters.callback || null;
   }
 
-  Key.prototype.set = function(start, end, min, max) {
-    this.start = start;
-    this.end = end;
-    this.min = min;
-    return this.max = max;
+  Key.prototype.set = function(start, end, min, max, threshold) {
+    if (start != null) {
+      this.start = start;
+    }
+    if (end != null) {
+      this.end = end;
+    }
+    if (min != null) {
+      this.min = min;
+    }
+    if (max != null) {
+      return this.max = max;
+    }
   };
 
   Key.prototype.update = function(frequency) {
@@ -355,10 +445,10 @@ BEATS.Key = (function() {
     }
     value = (frequency - this.min) / (this.max - this.min);
     value = Math.min(1, Math.max(0, value));
-    if (this.friction) {
-      this.value += (value - this.value) * this.friction;
-    } else {
+    if (this.smoothness <= 1) {
       this.value = value;
+    } else {
+      this.value += (value - this.value) * (1 / this.smoothness);
     }
     if (!this.threshold) {
       return;
@@ -381,55 +471,218 @@ BEATS.Key = (function() {
 
 })();
 
-BEATS.Sequencer = (function() {
-  function Sequencer(parameters) {
-    var i, j, positions, ref, sequence, sequences;
-    sequences = parameters.sequences;
-    sequences.unshift([0]);
-    this.onChange = parameters.onChange;
-    this.positions = [];
-    this.names = [];
-    this.onStartCallbacks = [];
-    this.onUpdateCallbacks = [];
-    this.onCompleteCallbacks = [];
-    for (i = j = 0, ref = sequences.length; 0 <= ref ? j < ref : j > ref; i = 0 <= ref ? ++j : --j) {
-      sequence = sequences[i];
-      positions = sequence[0];
-      parameters = sequence[1] || {};
-      this.positions[this.positions.length++] = positions;
-      this.names[this.names.length++] = parameters.name;
-      this.onStartCallbacks[this.onStartCallbacks.length++] = parameters.onStart;
-      this.onUpdateCallbacks[this.onUpdateCallbacks.length++] = parameters.onUpdate;
-      this.onCompleteCallbacks[this.onCompleteCallbacks.length++] = parameters.onComplete;
+BEATS.Phase = (function() {
+  function Phase(time, values1, parameters) {
+    this.time = time;
+    this.values = values1;
+    this.initialize = bind(this.initialize, this);
+    if (this.values == null) {
+      this.values = {};
     }
-    this.index = 0;
+    if (parameters == null) {
+      parameters = {};
+    }
+    this.name = parameters.name;
+    this.onStart = parameters.onStart;
+    this.onUpdate = parameters.onUpdate;
+    this.onComplete = parameters.onComplete;
   }
 
-  Sequencer.prototype.update = function(currentTime) {
-    if (this.onUpdateCallbacks[this.index] != null) {
-      this.onUpdateCallbacks[this.index]();
+  Phase.prototype.initialize = function() {
+    var i, j, key, modulator, name, parameter, ref, results1, value, values;
+    i = 0;
+    results1 = [];
+    while (i <= this.index) {
+      ref = this.phases[i].values;
+      for (name in ref) {
+        values = ref[name];
+        j = this.keys.length;
+        while (j--) {
+          if (this.keys[j].name === name) {
+            key = this.keys[j];
+            for (parameter in values) {
+              value = values[parameter];
+              key[parameter] = value;
+            }
+          }
+        }
+        j = this.modulators.length;
+        while (j--) {
+          if (this.modulators[j].name === name) {
+            modulator = this.modulators[j];
+            for (parameter in values) {
+              value = values[parameter];
+              if (parameter === 'active') {
+                modulator.active = value;
+              } else {
+                modulator.filter[parameter].value = value;
+              }
+            }
+          }
+        }
+      }
+      results1.push(i++);
     }
-    if (currentTime >= this.positions[this.index + 1]) {
-      if (this.onCompleteCallbacks[this.index] != null) {
-        this.onCompleteCallbacks[this.index]();
-      }
-      this.index++;
-      if (this.onStartCallbacks[this.index] != null) {
-        this.onStartCallbacks[this.index]();
-      }
-      if (this.onChange != null) {
-        return this.onChange();
-      }
-    }
+    return results1;
   };
 
-  return Sequencer;
+  return Phase;
+
+})();
+
+BEATS.BPMProcessor = (function() {
+  function BPMProcessor(buffer) {
+    this.groupByTempo = bind(this.groupByTempo, this);
+    this.identifyIntervals = bind(this.identifyIntervals, this);
+    this.getMax = bind(this.getMax, this);
+    this.getMin = bind(this.getMin, this);
+    this.process = bind(this.process, this);
+    this.start = bind(this.start, this);
+    var filter;
+    this.minThreshold = 0.3;
+    this.minPeaks = 15;
+    this.offlineContext = new OfflineAudioContext(1, buffer.length, buffer.sampleRate);
+    this.source = this.offlineContext.createBufferSource();
+    this.source.buffer = buffer;
+    filter = this.offlineContext.createBiquadFilter();
+    filter.type = 'lowpass';
+    this.source.connect(filter);
+    filter.connect(this.offlineContext.destination);
+    this.offlineContext.addEventListener('complete', this.process);
+  }
+
+  BPMProcessor.prototype.start = function() {
+    this.source.start(0);
+    return this.offlineContext.startRendering();
+  };
+
+  BPMProcessor.prototype.process = function(event) {
+    var buffer, data, intervals, max, min, peaks, tempos, threshold;
+    buffer = event.renderedBuffer;
+    data = buffer.getChannelData(0);
+    peaks = [];
+    min = this.getMin(data);
+    max = this.getMax(data);
+    threshold = min + (max - min);
+    while (peaks.length < this.minPeaks && threshold >= this.minThreshold) {
+      peaks = this.getPeaksAtThreshold(data, threshold);
+      threshold -= 0.02;
+    }
+    if (peaks.length < this.minPeaks) {
+      throw new Error('Could not find enough samples for a reliable detection');
+      return;
+    }
+    intervals = this.identifyIntervals(peaks);
+    tempos = this.groupByTempo(intervals);
+    tempos.sort(function(a, b) {
+      return b.count - a.count;
+    });
+    return typeof this.onProcessEnd === "function" ? this.onProcessEnd(tempos[0].tempo) : void 0;
+  };
+
+  BPMProcessor.prototype.getMin = function(data) {
+    var i, min;
+    min = Infinity;
+    i = data.length;
+    while (i--) {
+      if (data[i] < min) {
+        min = data[i];
+      }
+    }
+    return min;
+  };
+
+  BPMProcessor.prototype.getMax = function(data) {
+    var i, max;
+    max = -Infinity;
+    i = data.length;
+    while (i--) {
+      if (data[i] > max) {
+        max = data[i];
+      }
+    }
+    return max;
+  };
+
+  BPMProcessor.prototype.getPeaksAtThreshold = function(data, threshold) {
+    var i, result;
+    result = [];
+    i = 0;
+    while (i < data.length) {
+      if (data[i] > threshold) {
+        result[result.length++] = i;
+        i += 10000;
+      }
+      i++;
+    }
+    return result;
+  };
+
+  BPMProcessor.prototype.identifyIntervals = function(peaks) {
+    var counts;
+    counts = [];
+    peaks.forEach(function(peak, index) {
+      var i, interval, result, results1;
+      i = 0;
+      results1 = [];
+      while (i < 10) {
+        interval = peaks[index + i] - peak;
+        result = counts.some(function(counts) {
+          if (counts.interval === interval) {
+            return counts.count++;
+          }
+        });
+        if (!isNaN(interval) && interval !== 0 && !result) {
+          counts[counts.length++] = {
+            interval: interval,
+            count: 1
+          };
+        }
+        results1.push(i++);
+      }
+      return results1;
+    });
+    return counts;
+  };
+
+  BPMProcessor.prototype.groupByTempo = function(counts) {
+    var results;
+    results = [];
+    counts.forEach(function(count) {
+      var foundTempo, theoreticalTempo;
+      if (count.interval === 0) {
+        return;
+      }
+      theoreticalTempo = 60 / (count.interval / 44100);
+      while (theoreticalTempo < 90) {
+        theoreticalTempo *= 2;
+      }
+      while (theoreticalTempo > 180) {
+        theoreticalTempo /= 2;
+      }
+      theoreticalTempo = Math.round(theoreticalTempo);
+      foundTempo = results.some(function(result) {
+        if (result.tempo === theoreticalTempo) {
+          return result.count += count.count;
+        }
+      });
+      if (!foundTempo) {
+        return results[results.length++] = {
+          tempo: theoreticalTempo,
+          count: count.count
+        };
+      }
+    });
+    return results;
+  };
+
+  return BPMProcessor;
 
 })();
 
 
 },{}],2:[function(require,module,exports){
-var BEATS, Draggable, GUI, Outcome, Spectrum, Track, dat,
+var BEATS, Draggable, GUI, Outcome, Spectrum, Track, colors, dat,
   bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; };
 
 BEATS = require('Beats');
@@ -444,119 +697,149 @@ Spectrum = require('gui/Spectrum');
 
 Track = require('gui/Track');
 
+colors = require('gui/colors');
+
 BEATS.GUI = GUI = (function() {
   function GUI(beats) {
     this.beats = beats;
     this.resize = bind(this.resize, this);
+    this.updateKeys = bind(this.updateKeys, this);
+    this.repeatPhase = bind(this.repeatPhase, this);
+    this.changeOutput = bind(this.changeOutput, this);
+    this.pause = bind(this.pause, this);
+    this.start = bind(this.start, this);
+    this.beats.media.controls = true;
+    this.beats.media.autoplay = false;
     this.gui = new dat.GUI();
+    document.head.appendChild(document.querySelector('.main-style'));
     this.output = this.beats.analyser;
     this.outcome = new Outcome(this.beats);
-    this.spectrum = new Spectrum(this.beats);
+    this.spectrum = new Spectrum(this.beats, this.changeOutput);
     this.track = new Track(this.beats);
-    this.dat();
+    this.setControllers();
     addEventListener('resize', this.resize, true);
+    addEventListener('keydown', this.pause, false);
     this.resize();
   }
 
-  GUI.prototype.changeOutput = function(output) {
-    this.output = output;
-    this.beats.output.disconnect();
-    this.output.connect(this.beats.destination);
-    return this.beats.output = this.output;
+  GUI.prototype.start = function() {
+    return document.querySelector('.overlay').classList.add('hide');
   };
 
-  GUI.prototype.dat = function() {
-    var Q, filter, folder, folders, frequency, gain, i, j, k, key, keys, modulator, modulators, name, names, outcome, output, ref, ref1, results, self, updateKeys;
-    names = ['none'];
-    folders = this.gui.addFolder('Modulators');
-    name = this.spectrum.container.querySelector('.container-name span');
-    modulators = this.beats.modulators;
-    for (i = j = 0, ref = this.beats.modulators.length; 0 <= ref ? j < ref : j > ref; i = 0 <= ref ? ++j : --j) {
-      modulator = this.beats.modulators[i];
-      folder = folders.addFolder(modulator.name);
-      names[names.length++] = modulator.name;
-      filter = modulator.filter;
-      frequency = folder.add(filter.frequency, 'value', 0, 40000);
-      frequency.name('frequency');
-      Q = folder.add(filter.Q, 'value', 0, 10);
-      Q.name('Q');
-      gain = folder.add(filter.gain, 'value', 0, 10);
-      gain.name('gain');
-      modulator.output = false;
-      output = folder.add(modulator, 'output');
-      output.name('output');
-      self = this;
-      output.listen().onChange(function(value) {
-        i = modulators.length;
-        while (i--) {
-          if (this.object.name === modulators[i].name) {
-
-          } else {
-            modulators[i].output = false;
-          }
-        }
-        if (value) {
-          name.innerText = this.object.name;
-          return self.changeOutput(this.object.analyser);
-        } else {
-          name.innerText = 'Main analyser';
-          return self.changeOutput(self.beats.analyser);
-        }
-      });
-    }
-    folders = this.gui.addFolder('Keys');
-    name = this.outcome.container.querySelector('.container-name span');
-    keys = this.beats.keys;
-    updateKeys = (function(_this) {
-      return function() {
-        var results;
-        i = _this.spectrum.keys.length;
-        results = [];
-        while (i--) {
-          results.push(_this.spectrum.keys[i].update());
-        }
-        return results;
-      };
-    })(this);
-    results = [];
-    for (i = k = 0, ref1 = this.beats.keys.length; 0 <= ref1 ? k < ref1 : k > ref1; i = 0 <= ref1 ? ++k : --k) {
-      key = this.beats.keys[i];
-      folder = folders.addFolder(key.name);
-      folder.add(key, 'active').listen().onChange(updateKeys);
-      folder.add(key, 'type', ['average', 'max']).listen().onChange(updateKeys);
-      folder.add(key, 'start', 0, this.levelCount).listen().step(1).onChange(updateKeys);
-      folder.add(key, 'end', 0, this.levelCount).listen().step(1).onChange(updateKeys);
-      folder.add(key, 'min', 0, 1).listen().step(0.01).onChange(updateKeys);
-      folder.add(key, 'max', 0, 1).listen().step(0.01).onChange(updateKeys);
-      folder.add(key, 'modulator', names).listen().onChange(updateKeys);
-      if (!i) {
-        key.graph = true;
+  GUI.prototype.pause = function(event) {
+    var media;
+    if (event.keyCode === 32) {
+      event.preventDefault();
+      media = this.beats.media;
+      if (media.paused) {
+        return media.play();
       } else {
-        key.graph = false;
+        return media.pause();
       }
-      outcome = this.outcome;
-      results.push(folder.add(key, 'graph').listen().onChange(function(value) {
-        i = keys.length;
-        while (i--) {
-          keys[i].graph = false;
-        }
-        if (value) {
-          outcome.currentKey = this.object;
-          name.innerText = this.object.name;
-          return this.object.graph = true;
-        } else {
-          outcome.currentKey = null;
-          return name.innerText = 'Nothing selected';
-        }
-      }));
+    } else {
+
+    }
+  };
+
+  GUI.prototype.changeOutput = function(output) {
+    this.beats.output.disconnect(0);
+    this.beats.output = output;
+    return this.beats.output.connect(this.beats.destination);
+  };
+
+  GUI.prototype.repeatPhase = function(value) {
+    var i, index;
+    this.loop = null;
+    i = this.phasesNames.length;
+    while (i--) {
+      if (value !== this.phasesNames[i] || this.phasesNames[i] === 'none') {
+        continue;
+      } else {
+        index = i - 1;
+      }
+    }
+    if (index == null) {
+      return;
+    }
+    this.loop = {
+      index: index,
+      start: this.beats.phases[index],
+      end: this.beats.phases[index + 1] || this.beats.duration
+    };
+    this.beats.media.currentTime = this.loop.start.time;
+    this.beats.position = this.loop.index;
+    return this.update(true);
+  };
+
+  GUI.prototype.updateKeys = function() {
+    var i, results;
+    i = this.spectrum.keys.length;
+    results = [];
+    while (i--) {
+      results.push(this.spectrum.keys[i].update());
     }
     return results;
   };
 
-  GUI.prototype.update = function() {
-    this.outcome.update(this.output);
-    this.spectrum.update(this.output);
-    return this.track.update(this.output);
+  GUI.prototype.setControllers = function() {
+    var filter, folder, folders, frequency, i, j, k, key, keys, modulator, modulators, modulatorsNames, phases, ref, ref1, results;
+    folders = this.gui.addFolder('General');
+    folders.add(this.beats.media, 'playbackRate', [0.5, 1.0, 1.5, 2.0]).name('playbackRate');
+    phases = {
+      repeat: null
+    };
+    this.phasesNames = ['none'];
+    i = this.beats.phases.length;
+    while (i--) {
+      this.phasesNames[this.phasesNames.length++] = ('000' + i).substr(-3);
+    }
+    folders.add(phases, 'repeat', this.phasesNames).name('repeatPhase').onChange(this.repeatPhase);
+    modulatorsNames = ['none'];
+    folders = this.gui.addFolder('Modulators');
+    modulators = this.beats.modulators;
+    for (i = j = 0, ref = this.beats.modulators.length; 0 <= ref ? j < ref : j > ref; i = 0 <= ref ? ++j : --j) {
+      modulator = this.beats.modulators[i];
+      folder = folders.addFolder(modulator.name);
+      modulatorsNames[modulatorsNames.length++] = modulator.name;
+      filter = modulator.filter;
+      frequency = folder.add(filter.frequency, 'value', 0, 40000);
+      frequency.name('frequency');
+      folder.add(filter.Q, 'value', 0, 10).name('Q');
+      folder.add(filter.gain, 'value', 0, 10).name('gain');
+    }
+    folders = this.gui.addFolder('Keys');
+    keys = this.beats.keys;
+    results = [];
+    for (i = k = 0, ref1 = this.beats.keys.length; 0 <= ref1 ? k < ref1 : k > ref1; i = 0 <= ref1 ? ++k : --k) {
+      key = this.beats.keys[i];
+      folder = folders.addFolder(key.name);
+      folder.add(key, 'active').listen().onChange(this.updateKeys);
+      folder.add(key, 'type', ['average', 'max']).listen().onChange(this.updateKeys);
+      folder.add(key, 'start', 0, this.levelCount).listen().step(1).onChange(this.updateKeys);
+      folder.add(key, 'end', 0, this.levelCount).listen().step(1).onChange(this.updateKeys);
+      folder.add(key, 'min', 0, 1).listen().step(0.01).onChange(this.updateKeys);
+      folder.add(key, 'max', 0, 1).listen().step(0.01).onChange(this.updateKeys);
+      folder.add(key, 'smoothness', 1, 100).listen().onChange(this.updateKeys);
+      results.push(folder.add(key, 'modulator', modulatorsNames).listen().onChange(this.updateKeys));
+    }
+    return results;
+  };
+
+  GUI.prototype.update = function(force) {
+    if ((this.loop != null) && this.beats.currentTime >= this.loop.end.time) {
+      this.beats.media.currentTime = this.loop.start.time;
+      this.beats.position = this.loop.index;
+    }
+    if (!this.outcome.initialize) {
+      force = true;
+      this.start();
+    }
+    if ((this.beats.media != null) && !this.beats.media.paused || force) {
+      this.outcome.update();
+      this.spectrum.update(this.beats.output);
+      this.track.update();
+      return force = false;
+    }
   };
 
   GUI.prototype.resize = function() {
@@ -570,40 +853,33 @@ BEATS.GUI = GUI = (function() {
 })();
 
 
-},{"Beats":1,"Draggable":8,"dat-gui":9,"gui/Outcome":5,"gui/Spectrum":6,"gui/Track":7}],3:[function(require,module,exports){
-var BEATS, audio, audioContext, ready, url;
+},{"Beats":1,"Draggable":10,"dat-gui":11,"gui/Outcome":5,"gui/Spectrum":7,"gui/Track":8,"gui/colors":9}],3:[function(require,module,exports){
+var BEATS, audio, context, initialize, url;
 
 BEATS = require('Beats');
 
 require('GUI');
 
-audioContext = new AudioContext;
-
 audio = new Audio();
+
+context = new AudioContext;
 
 url = 'audio/Walk.mp3';
 
-audio.src = url;
-
-audio.controls = true;
-
-audio.autoplay = false;
-
-ready = false;
-
-audio.oncanplaythrough = function() {
-  var beats, beatsGUI, context, frameRate, interval, oldTime, sequencer, sequences, startTime, update;
-  if (this.readyState !== 4 || ready === true) {
-    return;
-  }
-  ready = true;
-  context = new AudioContext;
+initialize = function() {
+  var beats, beatsGUI, update;
+  audio.removeEventListener('canplaythrough', initialize);
+  update = function() {
+    beats.update();
+    beatsGUI.update();
+    return requestAnimationFrame(update);
+  };
   beats = new BEATS.Interface(context, audio, {
     destination: context.destination,
     fftSize: 1024,
     levelCount: 128,
     mono: false,
-    buffered: true
+    onProcessEnd: update
   });
   beats.add(new BEATS.Modulator('lowpass', 440, {
     name: 'lowpass',
@@ -643,91 +919,70 @@ audio.oncanplaythrough = function() {
     modulator: 'highpass2',
     type: 'max',
     active: false,
-    threshold: 0.9,
+    threshold: 0.8,
     delay: 200
   }));
   beats.add(new BEATS.Key(12, 30, 0.1, 0.35, {
     name: 'piano',
+    smoothness: 10,
     active: true
   }));
   beats.add(new BEATS.Key(68, 88, 0.08, 0.3, {
     name: 'effect',
+    smoothness: 15,
     active: true
   }));
-  sequences = [
-    [
-      27, {
-        onStart: (function(_this) {
-          return function() {
-            beats.get('kick').active = true;
-            beats.get('kick').min = 0.88;
-            beats.get('snare').active = true;
-            beats.get('effect').active = false;
-            return beats.get('piano').active = false;
-          };
-        })(this)
-      }
-    ], [
-      54, {
-        onStart: (function(_this) {
-          return function() {
-            beats.get('hit-hat').active = true;
-            return beats.get('piano').active = true;
-          };
-        })(this)
-      }
-    ], [
-      82, {
-        onStart: (function(_this) {
-          return function() {
-            beats.get('kick').set(1, 2, 0.88, 0.92);
-            return beats.get('lowpass').filter.frequency.value = 100;
-          };
-        })(this)
-      }
-    ]
-  ];
-  sequencer = beats.add(new BEATS.Sequencer({
-    onChange: function() {
-      return console.log('Sequence change');
+  beats.add(new BEATS.Phase(27.550, {
+    'kick': {
+      active: true,
+      min: 0.88
     },
-    sequences: sequences
-  }));
-  beats.active = true;
-  beatsGUI = new BEATS.GUI(beats);
-  sequencer.onChange = (function(_this) {
-    return function() {
-      return beatsGUI.update();
-    };
-  })(this);
-  startTime = performance.now();
-  oldTime = startTime;
-  frameRate = 30;
-  interval = 1000 / frameRate;
-  update = function() {
-    var delta, newTime;
-    newTime = performance.now();
-    delta = newTime - oldTime;
-    if (delta > interval) {
-      oldTime = newTime - (delta % interval);
-      beats.update();
-      beatsGUI.update();
+    'snare': {
+      active: true
+    },
+    'effect': {
+      active: false
+    },
+    'piano': {
+      active: false
     }
-    return requestAnimationFrame(update);
-  };
-  return update();
+  }));
+  beats.add(new BEATS.Phase(55.000, {
+    'hit-hat': {
+      active: true
+    }
+  }));
+  beats.add(new BEATS.Phase(82.500, {
+    'kick': {
+      start: 1,
+      end: 2,
+      min: 0.88,
+      max: 0.92
+    },
+    'lowpass': {
+      frequency: 100
+    }
+  }));
+  return beatsGUI = new BEATS.GUI(beats);
 };
+
+audio.addEventListener('canplaythrough', initialize);
+
+audio.src = url;
 
 
 },{"Beats":1,"GUI":2}],4:[function(require,module,exports){
-var Key;
+var Key,
+  bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; };
 
 module.exports = Key = (function() {
-  function Key(values, bounds, template) {
+  function Key(values, bounds, color, template) {
     this.values = values;
     this.bounds = bounds;
+    this.resize = bind(this.resize, this);
     this.element = template.cloneNode(true);
     this.element.className = 'key';
+    this.element.style.boxShadow = "0 0 0 1px " + color + " inset";
     this.name = this.element.querySelector('.name');
     this.name.innerText = this.values.name;
     this.handle = this.element.querySelector('.handle');
@@ -795,12 +1050,13 @@ module.exports = Key = (function() {
     height = (this.values.max - this.values.min) * this.canvasHeight;
     this.element.style.height = height + 'px';
     this.element.style.width = width + 'px';
-    return this.element.style.transform = 'translate3d(' + x + 'px,' + y + 'px, 0px)';
+    return this.element.style.transform = 'translate3d( ' + x + 'px,' + y + 'px, 0px )';
   };
 
   Key.prototype.resize = function(levelSize, canvasHeight) {
     this.levelSize = levelSize;
     this.canvasHeight = canvasHeight;
+    this.update();
     return this.set();
   };
 
@@ -810,43 +1066,71 @@ module.exports = Key = (function() {
 
 
 },{}],5:[function(require,module,exports){
-var Outcome;
+var Outcome, colors,
+  bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; };
+
+colors = require('gui/colors');
 
 module.exports = Outcome = (function() {
   function Outcome(beats) {
-    var grid, i, j, k, l, line, linesCount, name, output, ref, ref1, template;
+    var button, buttonTemplate, grid, i, j, k, keyTemplate, l, level, line, linesCount, name, output, ref, ref1;
     this.beats = beats;
+    this.draw = bind(this.draw, this);
+    this.toggle = bind(this.toggle, this);
+    this.highlightCallback = bind(this.highlightCallback, this);
     this.container = document.querySelector('.graph-keys');
+    this.graphControls = this.container.querySelector('.graph-keys-controls');
+    this.grid = this.container.querySelector('.grid');
     this.canvas = this.container.querySelector('canvas');
     this.context = this.canvas.getContext('2d');
     this.controls = document.querySelector('.controls');
     this.media = this.beats.input.mediaElement;
     this.media.className = 'audio';
     this.controls.appendChild(this.media);
-    Draggable.create(this.controls);
+    this.bpm = document.createElement('div');
+    this.bpm.className = 'bpm';
+    this.controls.appendChild(this.bpm);
     this.outputs = [];
     this.values = [];
     this.levels = [];
     this.thresholds = [];
     this.callbacks = [];
     this.circles = [];
-    template = this.controls.querySelector('.template');
+    keyTemplate = this.controls.querySelector('.template');
+    buttonTemplate = this.graphControls.querySelector('.template');
     this.keys = this.beats.keys;
-    this.currentKey = this.keys[0];
-    this.valueByTime = [];
+    this.buttons = [];
+    this.datas = [];
     for (i = k = 0, ref = this.keys.length; 0 <= ref ? k < ref : k > ref; i = 0 <= ref ? ++k : --k) {
-      output = template.cloneNode(true);
-      output.className = "output";
+      output = keyTemplate.cloneNode(true);
+      output.className = 'output';
       name = output.querySelector('.name');
+      name.style.color = colors[i];
       name.innerText = this.keys[i].name;
       this.controls.appendChild(output);
       this.outputs[this.outputs.length++] = output;
       this.values[this.values.length++] = output.querySelector('.value');
-      this.levels[this.levels.length++] = output.querySelector('.level');
       this.thresholds[this.thresholds.length++] = output.querySelector('.threshold');
       this.callbacks[this.callbacks.length++] = output.querySelector('.callback');
       this.circles[this.circles.length++] = output.querySelector('.circle');
+      level = this.levels[this.levels.length++] = output.querySelector('.level');
+      button = document.createElement('div');
+      button.innerText = this.keys[i].name;
+      button.style.color = colors[i];
+      button.className = 'button-graph button';
+      button.classList.add('active');
+      this.graphControls.appendChild(button);
+      button.addEventListener('click', this.toggle);
+      this.buttons[i] = button;
+      this.datas[i] = [];
     }
+    this.keys.forEach((function(_this) {
+      return function(key, index) {
+        return key.callback = function() {
+          return _this.highlightCallback(key);
+        };
+      };
+    })(this));
     grid = this.container.querySelector('.grid');
     linesCount = 10;
     for (j = l = 0, ref1 = linesCount; 0 <= ref1 ? l <= ref1 : l >= ref1; j = 0 <= ref1 ? ++l : --l) {
@@ -861,9 +1145,36 @@ module.exports = Outcome = (function() {
     }
   }
 
+  Outcome.prototype.highlightCallback = function(key) {
+    var callback;
+    callback = this.callbacks[key.index];
+    this.setCallbackStyle(callback, colors[key.index], 1);
+    return setTimeout((function(_this) {
+      return function() {
+        return _this.setCallbackStyle(callback, '#ffffff', 0.5);
+      };
+    })(this), 250);
+  };
+
+  Outcome.prototype.setCallbackStyle = function(callback, color, opacity) {
+    callback.style.opacity = opacity;
+    return callback.style.color = color;
+  };
+
+  Outcome.prototype.toggle = function(event) {
+    event.currentTarget.classList.toggle('active');
+    return this.update();
+  };
+
   Outcome.prototype.update = function() {
-    var height, i, k, key, ref;
+    var i, key, results;
+    this.context.clearRect(0, 0, this.width, this.canvas.height);
+    if (!this.initialize) {
+      this.bpm.textContent = this.beats.bpm + ' BPM';
+      this.initialize = true;
+    }
     i = this.beats.keys.length;
+    results = [];
     while (i--) {
       key = this.beats.keys[i];
       this.values[i].innerText = key.value.toFixed(3);
@@ -879,42 +1190,48 @@ module.exports = Outcome = (function() {
       if (key.active) {
         this.outputs[i].style.opacity = 1.0;
         this.levels[i].style.height = 100 * key.value + "%";
-        this.circles[i].style.transform = 'translateX(-25%) scale(' + key.value + ')';
+        this.circles[i].style.transform = 'scale(' + key.value + ')';
       } else {
         this.outputs[i].style.opacity = 0.2;
       }
+      if (this.datas[i].length >= this.waveCountKeys) {
+        this.datas[i].shift();
+      }
+      this.datas[i][this.datas[i].length++] = key.value;
+      if (this.buttons[i].classList.contains('active')) {
+        results.push(this.draw(key, this.datas[i], colors[i]));
+      } else {
+        results.push(void 0);
+      }
     }
-    this.context.clearRect(0, 0, this.width, this.canvas.height);
-    this.context.strokeStyle = "white";
-    if (this.valueByTime.length >= this.waveCountKeys) {
-      this.valueByTime.shift();
-    }
-    if (this.currentKey == null) {
-      return;
-    }
-    this.valueByTime[this.valueByTime.length++] = this.currentKey.value;
+    return results;
+  };
+
+  Outcome.prototype.draw = function(key, datas, color) {
+    var i, k, ref, y;
+    this.context.strokeStyle = color;
     this.context.beginPath();
     this.context.setLineDash([]);
     for (i = k = 0, ref = this.waveCountKeys; 0 <= ref ? k < ref : k > ref; i = 0 <= ref ? ++k : --k) {
-      height = -this.valueByTime[i] * this.height + this.height;
-      this.context.lineTo(i * this.waveSizeKeys, height);
+      y = -datas[i] * this.height + this.height;
+      this.context.lineTo(i * this.waveSizeKeys, y);
     }
     this.context.stroke();
-    if (this.currentKey.threshold == null) {
+    if (key.threshold == null) {
       return;
     }
     this.context.beginPath();
-    this.context.strokeStyle = "white";
-    height = -this.currentKey.threshold * this.height + this.height;
+    this.context.strokeStyle = color;
+    y = -key.threshold * this.height + this.height;
     this.context.setLineDash([5, 5]);
-    this.context.moveTo(0, height);
-    this.context.lineTo(this.width, height);
+    this.context.moveTo(0, y);
+    this.context.lineTo(this.width, y);
     return this.context.stroke();
   };
 
   Outcome.prototype.resize = function() {
     this.width = this.canvas.width = this.canvas.parentNode.clientWidth;
-    this.height = this.canvas.height = 150;
+    this.height = this.canvas.height = this.grid.clientHeight;
     this.waveCountKeys = 300;
     return this.waveSizeKeys = this.width / this.waveCountKeys;
   };
@@ -924,8 +1241,74 @@ module.exports = Outcome = (function() {
 })();
 
 
-},{}],6:[function(require,module,exports){
-var Key, Spectrum, TweenMax;
+},{"gui/colors":9}],6:[function(require,module,exports){
+var Phase,
+  bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; };
+
+module.exports = Phase = (function() {
+  function Phase(values, mediaDuration, track, template) {
+    var self;
+    this.values = values;
+    this.mediaDuration = mediaDuration;
+    this.track = track;
+    this.resize = bind(this.resize, this);
+    this.set = bind(this.set, this);
+    this.onDrag = bind(this.onDrag, this);
+    this.element = template.cloneNode(true);
+    this.element.className = "sequence";
+    this.text = this.element.querySelector('.value');
+    self = this;
+    this.draggable = new Draggable(this.element, {
+      bounds: this.track.sequences,
+      type: 'x',
+      lockAxis: true,
+      cursor: 'ew-resize',
+      onPress: (function(_this) {
+        return function() {
+          return _this.track.dragged = true;
+        };
+      })(this),
+      onRelease: (function(_this) {
+        return function() {
+          return _this.track.dragged = false;
+        };
+      })(this),
+      onDrag: function() {
+        return self.onDrag(this.x);
+      }
+    });
+  }
+
+  Phase.prototype.onDrag = function(x) {
+    var time;
+    time = x / this.canvasWidth * this.mediaDuration;
+    time = Math.round(time * 1000) * 0.001;
+    this.text.textContent = time.toFixed(3);
+    return this.values.time = time;
+  };
+
+  Phase.prototype.set = function() {
+    var ref;
+    TweenMax.set(this.element, {
+      x: this.values.time / this.mediaDuration * this.canvasWidth
+    });
+    this.text.textContent = this.values.time.toFixed(3);
+    return (ref = this.draggable) != null ? ref.update() : void 0;
+  };
+
+  Phase.prototype.resize = function(canvasWidth) {
+    this.canvasWidth = canvasWidth;
+    return this.set();
+  };
+
+  return Phase;
+
+})();
+
+
+},{}],7:[function(require,module,exports){
+var Key, Spectrum, TweenMax, colors,
+  bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; };
 
 TweenMax = require('gsap');
 
@@ -933,16 +1316,26 @@ require('Draggable');
 
 Key = require('gui/Key');
 
+colors = require('gui/colors');
+
 module.exports = Spectrum = (function() {
-  function Spectrum(beats) {
-    var button, i, j, k, l, line, linesCount, ref, ref1, ref2, template;
+  function Spectrum(beats, changeOutput) {
+    var button, i, j, k, l, line, linesCount, m, ref, ref1, ref2, ref3, template;
     this.beats = beats;
+    this.changeOutput = changeOutput;
+    this.getAnalyser = bind(this.getAnalyser, this);
     this.container = document.querySelector('.graph-spectrum');
+    this.graphControls = this.container.querySelector('.graph-spectrum-controls');
     this.grid = this.container.querySelector('.grid');
     this.canvas = this.container.querySelector('canvas');
     this.context = this.canvas.getContext('2d');
-    this.showWaveform = false;
+    this.buttons = [this.graphControls.querySelector('.active')];
+    this.current = this.buttons[0];
     button = this.container.querySelector('.button-waveform');
+    this.showWaveform = false;
+    if (this.showWaveform) {
+      button.classList.add('active');
+    }
     button.addEventListener('click', (function(_this) {
       return function(event) {
         if (event.target.classList.contains('active')) {
@@ -957,11 +1350,22 @@ module.exports = Spectrum = (function() {
     this.keys = [];
     template = this.container.querySelector('.template');
     for (i = j = 0, ref = this.beats.keys.length; 0 <= ref ? j < ref : j > ref; i = 0 <= ref ? ++j : --j) {
-      this.keys[i] = new Key(this.beats.keys[i], this.grid, template);
+      this.keys[i] = new Key(this.beats.keys[i], this.grid, colors[i], template);
       this.grid.appendChild(this.keys[i].element);
     }
+    for (i = k = 0, ref1 = this.beats.modulators.length; 0 <= ref1 ? k < ref1 : k > ref1; i = 0 <= ref1 ? ++k : --k) {
+      button = document.createElement('div');
+      button.textContent = this.beats.modulators[i].name;
+      button.className = 'button-graph button';
+      this.graphControls.appendChild(button);
+      this.buttons[i + 1] = button;
+    }
+    i = this.buttons.length;
+    while (i--) {
+      this.buttons[i].addEventListener('click', this.getAnalyser);
+    }
     linesCount = 20;
-    for (i = k = 0, ref1 = linesCount; 0 <= ref1 ? k <= ref1 : k >= ref1; i = 0 <= ref1 ? ++k : --k) {
+    for (i = l = 0, ref2 = linesCount; 0 <= ref2 ? l <= ref2 : l >= ref2; i = 0 <= ref2 ? ++l : --l) {
       line = document.createElement('div');
       if (i % 10 === 0) {
         line.className = "line h half";
@@ -972,7 +1376,7 @@ module.exports = Spectrum = (function() {
       this.grid.appendChild(line);
     }
     this.lines = [];
-    for (i = l = 0, ref2 = this.beats.levelCount; 0 <= ref2 ? l <= ref2 : l >= ref2; i = 0 <= ref2 ? ++l : --l) {
+    for (i = m = 0, ref3 = this.beats.levelCount; 0 <= ref3 ? m <= ref3 : m >= ref3; i = 0 <= ref3 ? ++m : --m) {
       line = document.createElement('div');
       line.className = "line v";
       this.lines[this.lines.length++] = line;
@@ -980,12 +1384,45 @@ module.exports = Spectrum = (function() {
     }
   }
 
+  Spectrum.prototype.getAnalyser = function(event) {
+    var i, modulator, name, output, ref, results;
+    if ((ref = this.current) != null) {
+      ref.classList.remove('active');
+    }
+    this.current = event.currentTarget;
+    name = this.current.textContent;
+    this.current.classList.add('active');
+    modulator = this.beats.get(name);
+    if (name === 'main') {
+      output = this.beats.analyser;
+    } else {
+      output = modulator.analyser;
+    }
+    this.changeOutput(output);
+    this.frequencyHz = null;
+    this.magnitude = null;
+    this.phase = null;
+    if (modulator != null) {
+      this.filter = modulator.filter;
+      this.frequencyBars = 1000;
+      this.frequencies = new Float32Array(this.frequencyBars);
+      this.magnitude = new Float32Array(this.frequencyBars);
+      this.phase = new Float32Array(this.frequencyBars);
+      i = this.frequencyBars;
+      results = [];
+      while (i--) {
+        results.push(this.frequencies[i] = 2000 / this.frequencyBars * (i + 1));
+      }
+      return results;
+    }
+  };
+
   Spectrum.prototype.update = function(output) {
-    var height, i, width, x, y;
+    var barWidth, height, i, results, step, width, x, y;
     this.context.clearRect(0, 0, this.width, this.height);
     i = this.levelCount;
     while (i--) {
-      this.context.fillStyle = 'rgba( 255, 255, 255, 0.5 )';
+      this.context.fillStyle = 'rgba( 255, 255, 255, 0.15 )';
       if (output.spectrum[i] > 0) {
         x = i * this.levelSize;
         height = output.spectrum[i] * this.height;
@@ -994,18 +1431,44 @@ module.exports = Spectrum = (function() {
         this.context.fillRect(x, y, width, height);
       }
     }
-    this.context.beginPath();
+    if (this.magnitude != null) {
+      this.filter.getFrequencyResponse(this.frequencies, this.magnitude, this.phase);
+      barWidth = this.width / this.frequencyBars;
+      this.context.strokeStyle = 'rgba( 255, 255, 255, 0.8 )';
+      this.context.beginPath();
+      this.context.setLineDash([2, 2]);
+      step = 0;
+      while (step < this.frequencyBars) {
+        this.context.lineTo(step * barWidth, this.height - this.magnitude[step] * 90);
+        step++;
+      }
+      this.context.stroke();
+      this.context.strokeStyle = 'rgba( 255, 255, 255, 0.2 )';
+      this.context.beginPath();
+      step = 0;
+      while (step < this.frequencyBars) {
+        this.context.lineTo(step * barWidth, this.height - (this.phase[step] * 90 + 300) / Math.PI);
+        step++;
+      }
+      this.context.stroke();
+      this.context.setLineDash([]);
+    }
     if (this.showWaveform) {
       this.context.strokeStyle = "rgba( 200, 200, 200, 0.95 )";
-    } else {
-      this.context.strokeStyle = "rgba( 200, 200, 200, 0.0 )";
+      this.context.beginPath();
+      i = this.waveCount;
+      while (i--) {
+        height = output.waveform[i] * this.height * 0.5 + this.height * 0.5;
+        this.context.lineTo(i * this.waveSize, height);
+      }
+      this.context.stroke();
     }
-    i = this.waveCount;
+    i = this.keys.length;
+    results = [];
     while (i--) {
-      height = output.waveform[i] * this.height * 0.5 + this.height * 0.5;
-      this.context.lineTo(i * this.waveSize, height);
+      results.push(this.keys[i].update());
     }
-    return this.context.stroke();
+    return results;
   };
 
   Spectrum.prototype.resize = function() {
@@ -1033,39 +1496,44 @@ module.exports = Spectrum = (function() {
 })();
 
 
-},{"Draggable":8,"gsap":12,"gui/Key":4}],7:[function(require,module,exports){
-var Track,
+},{"Draggable":10,"gsap":14,"gui/Key":4,"gui/colors":9}],8:[function(require,module,exports){
+var Phase, Track,
   bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; };
+
+Phase = require('gui/Phase');
 
 module.exports = Track = (function() {
   function Track(beats) {
-    var i, k, name, position, positions, ref, sequence, template, value;
+    var i, k, ref, template;
     this.beats = beats;
     this.moveTo = bind(this.moveTo, this);
     this.removeListener = bind(this.removeListener, this);
     this.addListener = bind(this.addListener, this);
+    this.onScroll = bind(this.onScroll, this);
+    this.draw = bind(this.draw, this);
+    this.set = bind(this.set, this);
     this.container = document.querySelector('.track');
+    this.name = this.container.querySelector('.container-name');
     this.progress = document.querySelector('.progress');
     this.time = this.progress.querySelector('.time');
+    this.nodes = [];
+    this.values = [];
     this.scale = 3;
     this.canvas = this.container.querySelector('canvas');
     this.context = this.canvas.getContext('2d');
     this.container.addEventListener('mousedown', this.addListener);
     this.sequences = this.container.querySelector('.sequences');
     template = this.container.querySelector('.template');
-    positions = this.beats.sequencer.positions;
-    for (i = k = 0, ref = positions.length; 0 <= ref ? k < ref : k > ref; i = 0 <= ref ? ++k : --k) {
-      position = positions[i] / this.beats.media.duration;
-      sequence = template.cloneNode(true);
-      sequence.className = "sequence";
-      sequence.style.left = position * 100 * this.scale + "%";
-      value = sequence.querySelector('.value');
-      value.innerText = positions[i];
-      name = sequence.querySelector('.name');
-      name.innerText = this.beats.sequencer.names[i];
-      this.sequences.appendChild(sequence);
+    this.phases = [];
+    for (i = k = 0, ref = this.beats.phases.length; 0 <= ref ? k < ref : k > ref; i = 0 <= ref ? ++k : --k) {
+      this.phases[i] = new Phase(this.beats.phases[i], this.beats.media.duration, this, template);
+      this.sequences.appendChild(this.phases[i].element);
     }
+    this.sequences.addEventListener('scroll', this.onScroll);
+    this.onScroll();
   }
+
+  Track.prototype.set = function() {};
 
   Track.prototype.resample = function(width, audioData) {
     var buckIndex, i, j, max, min, res, resampled, sampleCount, value;
@@ -1167,7 +1635,23 @@ module.exports = Track = (function() {
     return results;
   };
 
+  Track.prototype.onScroll = function() {
+    if (this.sequences.scrollLeft <= 10) {
+      this.container.classList.add('hide-left');
+    } else {
+      this.container.classList.remove('hide-left');
+    }
+    if (this.sequences.scrollLeft >= this.sequences.scrollWidth - 10) {
+      return this.container.classList.add('hide-right');
+    } else {
+      return this.container.classList.remove('hide-right');
+    }
+  };
+
   Track.prototype.addListener = function(event) {
+    if (this.dragged) {
+      return;
+    }
     this.moveTo(event);
     this.container.addEventListener('mousemove', this.moveTo);
     return this.container.addEventListener('mouseup', this.removeListener);
@@ -1175,13 +1659,27 @@ module.exports = Track = (function() {
 
   Track.prototype.removeListener = function() {
     this.container.removeEventListener('mousemove', this.moveTo);
-    return this.container.removeEventListener('mouseup');
+    return this.container.removeEventListener('mouseup', this.removeListener);
   };
 
   Track.prototype.moveTo = function(event) {
-    var progress;
+    var currentTime, i, nextPhase, nextTime, phase, progress;
     progress = (event.clientX + this.sequences.scrollLeft - this.container.offsetLeft) / this.canvas.clientWidth;
-    return this.beats.media.currentTime = progress * this.beats.media.duration;
+    this.beats.media.currentTime = progress * this.beats.media.duration;
+    i = this.beats.phases.length;
+    while (i--) {
+      phase = this.beats.phases[i];
+      currentTime = this.beats.media.currentTime;
+      nextPhase = this.beats.phases[i + 1];
+      nextTime = nextPhase != null ? nextPhase.time : this.beats.duration;
+      if (currentTime >= phase.time && currentTime <= nextTime && i !== this.beats.position) {
+        this.beats.phases[i].initialize();
+        this.beats.position = i;
+      }
+    }
+    if (this.beats.media.paused) {
+      return this.update();
+    }
   };
 
   Track.prototype.update = function() {
@@ -1193,11 +1691,20 @@ module.exports = Track = (function() {
   };
 
   Track.prototype.resize = function() {
+    var i;
     this.width = this.container.clientWidth;
-    this.height = this.canvas.height = this.container.clientHeight;
-    this.canvas.width = this.width * this.scale;
+    this.height = this.container.clientHeight - this.name.offsetHeight;
+    this.canvasWidth = this.width * this.scale;
+    this.canvas.height = this.height;
+    this.canvas.width = this.canvasWidth;
+    i = this.phases.length;
+    while (i--) {
+      this.phases[i].resize(this.canvasWidth);
+    }
     this.done = false;
-    return this.draw();
+    this.draw();
+    this.update();
+    return this.set();
   };
 
   return Track;
@@ -1205,7 +1712,11 @@ module.exports = Track = (function() {
 })();
 
 
-},{}],8:[function(require,module,exports){
+},{"gui/Phase":6}],9:[function(require,module,exports){
+module.exports = ['#1abc9c', '#2ecc71', '#3498db', '#9b59b6', '#f1c40f', '#e67e22', '#e74c3c'];
+
+
+},{}],10:[function(require,module,exports){
 (function (global){
 /*!
  * VERSION: 0.13.0
@@ -3166,10 +3677,10 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 
-},{"gsap":12}],9:[function(require,module,exports){
+},{"gsap":14}],11:[function(require,module,exports){
 module.exports = require('./vendor/dat.gui')
 module.exports.color = require('./vendor/dat.color')
-},{"./vendor/dat.color":10,"./vendor/dat.gui":11}],10:[function(require,module,exports){
+},{"./vendor/dat.color":12,"./vendor/dat.gui":13}],12:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -3925,7 +4436,7 @@ dat.color.math = (function () {
 })(),
 dat.color.toString,
 dat.utils.common);
-},{}],11:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -7586,7 +8097,7 @@ dat.dom.CenteredDiv = (function (dom, common) {
 dat.utils.common),
 dat.dom.dom,
 dat.utils.common);
-},{}],12:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 (function (global){
 /*!
  * VERSION: 1.18.2

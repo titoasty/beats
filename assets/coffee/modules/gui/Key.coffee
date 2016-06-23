@@ -1,25 +1,31 @@
 module.exports = class Key
 
-	constructor: (@values, @bounds, template) ->
+	constructor: ( @values, @bounds, color, template ) ->
 
-		@element = template.cloneNode true
+		@element = template.cloneNode( true )
 		@element.className = 'key'
 
-		@name = @element.querySelector '.name'
+		@element.style.boxShadow =  "0 0 0 1px " + color + " inset"
+
+		@name = @element.querySelector( '.name' )
 		@name.innerText = @values.name
 
-		@handle = @element.querySelector '.handle'
+		@handle = @element.querySelector( '.handle' )
 
 	set: ->
 
 		self = @
 		@update()
 
-		## Set draggables for easily change key valeus
+		## Set draggables for easily change key values
 		Draggable.create @element,
 
-			bounds   : @bounds
-			liveSnap : x : (value) => @levelSize * Math.round value / @levelSize
+			bounds : @bounds
+
+			liveSnap : x : ( value ) =>
+
+				@levelSize * Math.round( value / @levelSize )
+
 			onDrag: ->
 
 				difference      = self.values.max - self.values.min
@@ -32,24 +38,26 @@ module.exports = class Key
 
 		Draggable.create @handle,
 
-			bounds   : @bounds
-			type     : 'top, left'
-			onPress  : (event) -> event.stopPropagation()
-			onDrag   : (event) ->
+			bounds  : @bounds
+			type    : 'top, left'
+			onPress : ( event ) -> event.stopPropagation()
+			onDrag  : ( event ) ->
 
 				self.values.min = self.values.max - @y / self.canvasHeight
 				self.values.end = self.values.start + Math.round @x / self.levelSize
 
-				TweenLite.set @target.parentNode, width: @x, height: @y
+				TweenLite.set( @target.parentNode, width: @x, height: @y )
 
-			liveSnap : x : (value) => @levelSize * Math.round value / @levelSize
+			liveSnap : x : ( value ) => @levelSize * Math.round value / @levelSize
 
 	update: ->
 
 		if @values.active
-			if !@element.classList.contains 'active'
-				@element.classList.add 'active'
-		else @element.classList.remove 'active'
+
+			if !@element.classList.contains( 'active' )
+				@element.classList.add( 'active' )
+
+		else @element.classList.remove( 'active' )
 
 		x = @values.start * @levelSize
 		y = ( 1 - @values.max ) * @canvasHeight
@@ -59,6 +67,9 @@ module.exports = class Key
 
 		@element.style.height    = height + 'px'
 		@element.style.width     = width + 'px'
-		@element.style.transform = 'translate3d(' + x + 'px,' + y + 'px, 0px)'
+		@element.style.transform = 'translate3d( ' + x + 'px,' + y + 'px, 0px )'
 
-	resize: (@levelSize, @canvasHeight) -> @set()
+	resize: ( @levelSize, @canvasHeight ) =>
+
+		@update()
+		@set()

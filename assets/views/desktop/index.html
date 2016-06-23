@@ -5,64 +5,82 @@
     <meta charset="utf-8">
     <meta name="description" content="">
     <title>Beats Editor</title>
+    <link class="main-style" rel="stylesheet" href="css/index.css">
 </head>
 
 <body>
 
-	<div class="container graph-keys">
-		<div class="container-name">Value by time /
-			<span>Kick</span>
-		</div>
-		<div class="grid">
-			<canvas></canvas>
-		</div>
-	</div>
+	<div class="wrapper">
 
-	<div class="container controls">
-		<div class="template">
-			<div class="name"></div>
-			<div class="value mono">0.000</div>
-			<div class="meter">
-				<div class="level"></div>
-				<div class="threshold"></div>
-				<div class="callback">CB</div>
+		<div class="container track">
+			<div class="container-name">Sequencer
+				<span> / Buffer not load or loading</span>
 			</div>
-			<div class="circle"></div>
-		</div>
-	</div>
-
-	<div class="container graph-spectrum">
-		<div class="container-name">Spectrum and waveform /
-			<span>main analyser</span>
-			<span class="button-waveform">Show waveform</span>
-		</div>
-		<div class="grid">
-			<canvas></canvas>
-		</div>
-		<div class="template">
-			<div class="name"></div>
-			<div class="handle"></div>
-		</div>
-	</div>
-
-	<div class="container track">
-		<div class="container-name">Sequencer  /
-			<span>Buffer not load or loading</span>
-		</div>
-		<div class="template">
-			<div class="name"></div>
-			<div class="value mono">0.000</div>
-		</div>
-		<div class="sequences">
-			<canvas></canvas>
-			<div class="sequence progress">
-				<div class="value mono time">0.000</div>
+			<div class="template">
+				<div class="value mono">0.000</div>
+			</div>
+			<div class="sequences">
+				<canvas></canvas>
+				<div class="sequence progress">
+					<div class="value mono time">0.000</div>
+				</div>
 			</div>
 		</div>
+
+		<div class="wrapper-half">
+			<div class="container graph-keys half">
+				<div class="container-name">Value by time</div>
+				<div class="grid">
+					<canvas></canvas>
+				</div>
+				<div class="graph-keys-controls graph-controls"></div>
+			</div>
+
+			<div class="container controls half">
+				<div class="template">
+					<div class="name"></div>
+					<div class="value mono">0.000</div>
+					<div class="meter">
+						<div class="level"></div>
+						<div class="threshold"></div>
+						<div class="callback">CB</div>
+					</div>
+					<div class="circle"></div>
+				</div>
+			</div>
+		</div>
+
+		<div class="container graph-spectrum">
+			<div class="container-name">Spectrum and waveform
+				<span class="button-waveform button">Show waveform</span>
+			</div>
+			<div class="grid">
+				<canvas></canvas>
+			</div>
+			<div class="template">
+				<div class="name"></div>
+				<div class="handle"></div>
+			</div>
+			<div class="graph-spectrum-controls graph-controls">
+				<div class="button-graph button active">main</div>
+			</div>
+		</div>
+
 	</div>
+
+	<div class="overlay">
+		<div class="loader">
+			<div class="bar"></div>
+			<div class="bar"></div>
+			<div class="bar"></div>
+			<div class="bar"></div>
+			<div class="bar"></div>
+			<div class="bar"></div>
+		</div>
+	</div>
+
 </body>
 
 <script type="text/javascript" src="js/demo.bundle.js"></script>
-<link rel="stylesheet" href="css/main.css">
 
 </html>

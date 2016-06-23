@@ -18,7 +18,7 @@ server = http.Server(app);
 
 io = socket(server);
 
-port = process.env.PORT || 8080;
+port = 8081;
 
 app.use(express["static"](path.join(__dirname, './assets')));
 

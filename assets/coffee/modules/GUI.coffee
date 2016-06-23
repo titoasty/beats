@@ -6,44 +6,109 @@ Outcome  = require 'gui/Outcome'
 Spectrum = require 'gui/Spectrum'
 Track    = require 'gui/Track'
 
+colors = require 'gui/colors'
+
 BEATS.GUI = class GUI
 
-	constructor: (@beats) ->
+	constructor: ( @beats ) ->
+
+		@beats.media.controls = true
+		@beats.media.autoplay = false
 
 		## Initialize dat.GUI
 		@gui = new dat.GUI()
 
-		# Draggable.create @gui.domElement
+		## Override dat.GUI style
+		document.head.appendChild( document.querySelector( '.main-style' ) )
 
 		## Initial output (which analyser will be shown)
 		@output = @beats.analyser
 
-		@outcome  = new Outcome @beats
-		@spectrum = new Spectrum @beats
-		@track    = new Track @beats
+		@outcome  = new Outcome( @beats )
+		@spectrum = new Spectrum( @beats, @changeOutput )
+		@track    = new Track( @beats )
 
 		## Set dat controls
-		@dat()
+		@setControllers()
 
-		addEventListener 'resize', @resize, true
+		addEventListener( 'resize', @resize, true )
+		addEventListener( 'keydown', @pause, false )
 
 		## Resize once on start
 		@resize()
 
-	changeOutput: (output) ->
+	start: =>
 
-		@output = output
-		@beats.output.disconnect()
-		@output.connect @beats.destination
-		@beats.output = @output
+		document.querySelector( '.overlay' ).classList.add( 'hide' )
 
-	dat: ->
+	pause: ( event ) =>
 
-		## Store name of modulators to be able to change it in keys controls
-		names = [ 'none' ]
-		folders = @gui.addFolder 'Modulators'
+		if event.keyCode == 32
 
-		name = @spectrum.container.querySelector '.container-name span'
+			event.preventDefault()
+
+			media = @beats.media
+			if media.paused then media.play()
+			else media.pause()
+
+		else return
+
+	changeOutput: ( output ) =>
+
+		## Swicth output
+		@beats.output.disconnect( 0 )
+		@beats.output = output
+		@beats.output.connect( @beats.destination )
+
+	repeatPhase: ( value ) =>
+
+		@loop = null
+
+		i = @phasesNames.length
+		while i--
+
+			## Get the index of the phase
+			if value != @phasesNames[ i ] || @phasesNames[ i ] == 'none' then continue
+			else index = i - 1
+
+		return if !index?
+
+		## Store loop parameters
+		@loop =
+			index : index
+			start : @beats.phases[ index ]
+			end   : @beats.phases[ index + 1 ] || @beats.duration
+
+		## Update media current time
+		@beats.media.currentTime = @loop.start.time
+		@beats.position = @loop.index
+
+		@update( true )
+
+	updateKeys: =>
+
+		i = @spectrum.keys.length
+		@spectrum.keys[ i ].update() while i--
+
+	setControllers: ->
+
+		folders = @gui.addFolder( 'General' )
+		folders.add( @beats.media, 'playbackRate', [ 0.5, 1.0, 1.5, 2.0 ] ).name( 'playbackRate' )
+
+		## Add controller to repear a phase
+		phases = repeat : null
+		@phasesNames  = [ 'none' ]
+
+		i = @beats.phases.length
+		@phasesNames[ @phasesNames.length++ ] = ( '000' + i ).substr( -3 ) while i--
+
+		folders.add( phases, 'repeat', @phasesNames ).name( 'repeatPhase' )
+		.onChange( @repeatPhase )
+
+		## Store name of modulators to be able to change it in keys controllers
+		modulatorsNames = [ 'none' ]
+
+		folders = @gui.addFolder( 'Modulators' )
 		modulators = @beats.modulators
 
 		for i in [ 0...@beats.modulators.length ]
@@ -51,95 +116,59 @@ BEATS.GUI = class GUI
 			modulator = @beats.modulators[ i ]
 
 			## Add folder for each modulator and store its name
-			folder = folders.addFolder modulator.name
-			names[ names.length++ ] = modulator.name
+			folder = folders.addFolder( modulator.name )
+			modulatorsNames[ modulatorsNames.length++ ] = modulator.name
 
 			filter = modulator.filter
 
-			frequency = folder.add filter.frequency, 'value', 0, 40000
-			frequency.name 'frequency'
+			frequency = folder.add( filter.frequency, 'value', 0, 40000 )
+			frequency.name( 'frequency' )
 
-			Q = folder.add filter.Q, 'value', 0, 10
-			Q.name 'Q'
-
-			gain = folder.add filter.gain, 'value', 0, 10
-			gain.name 'gain'
-
-			## Create "output" property
-			modulator.output = false
-
-			output = folder.add modulator, 'output'
-			output.name 'output'
-
-			self = @
-			output.listen().onChange (value) ->
-
-				i = modulators.length
-				while i--
-
-					if @object.name == modulators[ i ].name
-					else modulators[ i ].output = false
-
-				if value
-
-					name.innerText = @object.name
-					self.changeOutput @object.analyser
-
-				else
-
-					name.innerText = 'Main analyser'
-					self.changeOutput self.beats.analyser
+			folder.add( filter.Q, 'value', 0, 10 ).name( 'Q' )
+			folder.add( filter.gain, 'value', 0, 10 ).name( 'gain' )
 
 
-		## Keys
-		folders = @gui.addFolder 'Keys'
-
-		name = @outcome.container.querySelector '.container-name span'
-		keys = @beats.keys
-
-		updateKeys = =>
-
-			i = @spectrum.keys.length
-			while i-- then @spectrum.keys[ i ].update()
+		folders = @gui.addFolder( 'Keys' )
+		keys    = @beats.keys
 
 		for i in [ 0...@beats.keys.length ]
 
 			key = @beats.keys[ i ]
-			folder = folders.addFolder key.name
 
-			folder.add( key, 'active', ).listen().onChange updateKeys
-			folder.add( key, 'type', [ 'average', 'max' ] ).listen().onChange updateKeys
-			folder.add( key, 'start', 0, @levelCount ).listen().step( 1 ).onChange updateKeys
-			folder.add( key, 'end'  , 0, @levelCount ).listen().step( 1 ).onChange updateKeys
-			folder.add( key, 'min'  , 0, 1 ).listen().step( 0.01 ).onChange updateKeys
-			folder.add( key, 'max'  , 0, 1 ).listen().step( 0.01 ).onChange updateKeys
-			folder.add( key, 'modulator', names ).listen().onChange updateKeys
+			## Add folder for each key
+			folder = folders.addFolder( key.name )
 
-			if !i then key.graph = true else key.graph = false
+			folder.add( key, 'active', ).listen().onChange( @updateKeys )
+			folder.add( key, 'type', [ 'average', 'max' ] ).listen().onChange( @updateKeys )
+			folder.add( key, 'start', 0, @levelCount ).listen().step( 1 ).onChange( @updateKeys )
+			folder.add( key, 'end'  , 0, @levelCount ).listen().step( 1 ).onChange( @updateKeys )
+			folder.add( key, 'min'  , 0, 1 ).listen().step( 0.01 ).onChange( @updateKeys )
+			folder.add( key, 'max'  , 0, 1 ).listen().step( 0.01 ).onChange( @updateKeys )
+			folder.add( key, 'smoothness', 1, 100 ).listen().onChange( @updateKeys )
 
-			outcome = @outcome
-			folder.add( key, 'graph', ).listen().onChange (value) ->
+			folder.add( key, 'modulator', modulatorsNames ).listen().onChange( @updateKeys )
 
-				i = keys.length
-				while i--
-					keys[ i ].graph = false
+	update: ( force ) ->
 
-				if value
+		## Loop through one phase if the parameters is set
+		if @loop? and @beats.currentTime >= @loop.end.time
 
-					outcome.currentKey = @object
-					name.innerText  = @object.name
-					@object.graph   = true
+			@beats.media.currentTime = @loop.start.time
+			@beats.position = @loop.index
 
-				else
+		if !@outcome.initialize
 
-					outcome.currentKey = null
-					name.innerText  = 'Nothing selected'
+			force = true
+			@start()
 
-	update: ->
+		## Update all the UI element
+		if @beats.media? and !@beats.media.paused or force
 
-		@outcome.update @output
-		@spectrum.update @output
-		@track.update @output
+			@outcome.update()
+			@spectrum.update( @beats.output )
+			@track.update()
+
+			force = false
 
 	resize: =>
 

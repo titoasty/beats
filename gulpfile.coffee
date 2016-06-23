@@ -22,7 +22,9 @@ sources =
         'assets/coffee/**/*.coffee',
         '!assets/coffee/app.coffee'
     ]
-    scss   : 'assets/scss/**/*.scss'
+    scss :
+        index : 'assets/scss/index.scss'
+        all   : 'assets/scss/*.scss'
 
 destinations =
     app  : ''
@@ -47,8 +49,8 @@ options =
 
     entries    : './assets/coffee/modules/example.coffee'
     debug      : true
-    transform  : ['coffeeify']
-    extensions : ['.coffee']
+    transform  : [ 'coffeeify' ]
+    extensions : [ '.coffee' ]
     paths: [
 
         './node_modules'
@@ -94,7 +96,7 @@ gulp.task 'nodemon', ->
 
 gulp.task 'styles', ->
 
-    gulp.src sources.scss
+    gulp.src sources.scss.index
     .pipe sass({ style: 'expanded', errLogToConsole: true })
     .pipe gulp.dest destinations.css
     .pipe livereload()
@@ -102,9 +104,9 @@ gulp.task 'styles', ->
 gulp.task 'watch', ->
 
     livereload.listen()
-    gulp.watch sources.app,    ['app']
-    gulp.watch sources.coffee, ['scripts']
-    gulp.watch sources.scss,   ['styles']
+    gulp.watch sources.app,      [ 'app' ]
+    gulp.watch sources.coffee,   [ 'scripts' ]
+    gulp.watch sources.scss.all, [ 'styles' ]
 
 
-gulp.task 'default', ['watch', 'scripts']
+gulp.task 'default', [ 'watch', 'scripts' ]

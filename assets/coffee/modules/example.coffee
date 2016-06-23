@@ -1,34 +1,28 @@
 BEATS = require 'Beats'
 require 'GUI'
 
-audioContext =  new AudioContext
+audio   = new Audio()
+context = new AudioContext
 
-# Create an audio element
-audio = new Audio()
+url     = 'audio/Walk.mp3'
 
-url = 'audio/Walk.mp3'
+initialize = ->
 
-audio.src      = url
-audio.controls = true
-audio.autoplay = false
-# audio.loop     = true
+	audio.removeEventListener( 'canplaythrough', initialize )
 
-ready = false
+	update = ->
 
-audio.oncanplaythrough = ->
+		beats.update()
+		beatsGUI.update()
+		requestAnimationFrame( update )
 
-	if @readyState != 4 || ready == true then return
-	ready = true
-
-	context = new AudioContext
-
-	## Initialize Beats interface to handle Keys and Modulators
 	beats = new BEATS.Interface context, audio,
-		destination : context.destination
-		fftSize     : 1024  ## Size of the Fast Fourier Transform
-		levelCount  : 128   ## Must be a power of two
-		mono        : false ## Down-mix from stereo to mono
-		buffered    : true  ## Get an audio buffer
+		destination  : context.destination
+		fftSize      : 1024  ## Size of the Fast Fourier Transform
+		levelCount   : 128   ## Must be a power of two
+		mono         : false ## Down-mix from stereo to mono
+
+		onProcessEnd : update
 
 	beats.add new BEATS.Modulator 'lowpass', 440,
 		name   : 'lowpass'
@@ -50,12 +44,12 @@ audio.oncanplaythrough = ->
 
 
 	beats.add new BEATS.Key 1.0, 2.0, 0.8, 0.9,
-		name      : 'kick'
-		modulator : 'lowpass'
-		active    : false
-		threshold : 0.9 ## Minimal value for callback
-		delay     : 200 ## Delay between the callback can be called
-		callback  : -> console.log 'Kicked'
+		name       : 'kick'
+		modulator  : 'lowpass'
+		active     : false
+		threshold  : 0.9 ## Minimal value for callback
+		delay      : 200 ## Delay between which the callback can be called
+		callback   : -> console.log 'Kicked'
 
 	beats.add new BEATS.Key 90, 120, 0.1, 0.35,
 		name      : 'hit-hat'
@@ -63,76 +57,50 @@ audio.oncanplaythrough = ->
 		active    : false
 
 	beats.add new BEATS.Key 50, 90, 0.4, 0.5,
-		name      : 'snare'
-		modulator : 'highpass2'
-		type      : 'max'
-		active    : false
-		threshold : 0.9
-		delay     : 200
+		name       : 'snare'
+		modulator  : 'highpass2'
+		type       : 'max'
+		active     : false
+		threshold  : 0.8
+		delay      : 200
 
 	beats.add new BEATS.Key 12, 30, 0.1, 0.35,
-		name   : 'piano'
-		active : true
+		name       : 'piano'
+		smoothness : 10
+		active     : true
 
 	beats.add new BEATS.Key 68, 88, 0.08, 0.3,
-		name   : 'effect'
-		active : true
+		name       : 'effect'
+		smoothness : 15
+		active     : true
 
 
-	sequences = [
-		[
-			27
-			onStart : =>
+	beats.add new BEATS.Phase 27.550,
 
-				beats.get( 'kick' ).active = true
-				beats.get( 'kick' ).min    = 0.88
+		'kick' :
+			active : true
+			min    : 0.88
 
-				beats.get( 'snare' ).active  = true
-				beats.get( 'effect' ).active = false
-				beats.get( 'piano' ).active  = false
-		]
-		[
-			54
-			onStart : =>
-				beats.get( 'hit-hat' ).active = true
-				beats.get( 'piano' ).active   = true
-		]
-		[
-			82
-			onStart : =>
-				beats.get( 'kick' ).set 1, 2, 0.88, 0.92
-				beats.get( 'lowpass' ).filter.frequency.value = 100
-		]
-	]
+		'snare'  : active : true
+		'effect' : active : false
+		'piano'  : active : false
 
-	sequencer = beats.add new BEATS.Sequencer
-		onChange  : -> console.log 'Sequence change'
-		sequences : sequences
+	beats.add new BEATS.Phase 55.000,
 
-	beats.active = true
+		'hit-hat' : active : true
 
-	beatsGUI = new BEATS.GUI beats
-	sequencer.onChange = => beatsGUI.update()
+	beats.add new BEATS.Phase 82.500,
 
-	## Update loop
-	startTime = performance.now()
-	oldTime   = startTime
+		'kick' :
+			start : 1
+			end   : 2
+			min   : 0.88
+			max   : 0.92
 
-	frameRate = 30
-	interval  = 1000 / frameRate
+		'lowpass' :
+			frequency : 100
 
-	update = ->
+	beatsGUI = new BEATS.GUI( beats )
 
-		newTime  = performance.now()
-		delta    = newTime - oldTime
-
-		## Control draw loop frame rate
-		if delta > interval
-
-			oldTime = newTime - ( delta % interval )
-			beats.update()
-			beatsGUI.update()
-
-		requestAnimationFrame update
-
-	update()
+audio.addEventListener( 'canplaythrough', initialize )
+audio.src = url
