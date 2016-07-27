@@ -1,3687 +1,2414 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
-var BEATS,
-  bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; };
+'use strict';
 
-BEATS = {};
+var _BEATS = require('./modules/BEATS.Utils');
 
-module.exports = BEATS;
+var _BEATS2 = _interopRequireDefault(_BEATS);
 
-BEATS.Interface = (function() {
-  function Interface(context, audio, parameters) {
-    this.context = context;
-    this.update = bind(this.update, this);
-    this.computeBPM = bind(this.computeBPM, this);
-    this.getSpectrum = bind(this.getSpectrum, this);
-    this.keys = [];
-    this.modulators = [];
-    this.phases = [];
-    this.phases[0] = new BEATS.Phase(0);
-    this.position = 0;
-    this.input = this.context.createMediaElementSource(audio);
-    this.loadBuffer(audio.src);
-    this.analyser = this.context.createAnalyser();
-    this.input.connect(this.analyser);
-    this.media = this.input.mediaElement;
-    this.duration = this.media.duration;
-    this.active = true;
-    this.destination = parameters.destination;
-    if (this.destination != null) {
-      this.analyser.connect(this.destination);
-      this.output = this.analyser;
-    }
-    if (parameters.fftSize) {
-      this.analyser.fftSize = parameters.fftSize;
-    }
-    if (parameters.smoothingTimeConstant) {
-      this.analyser.smoothingTimeConstant = parameters.smoothingTimeConstant;
-    }
-    this.analyser.frequencyData = new Uint8Array(this.analyser.frequencyBinCount);
-    this.analyser.timeDomainData = new Uint8Array(this.analyser.frequencyBinCount);
-    this.analyser.normalizedFrequencyData = new Float32Array(this.analyser.frequencyBinCount);
-    this.analyser.normalizedTimeDomainData = new Float32Array(this.analyser.frequencyBinCount);
-    if (parameters.levelCount != null) {
-      this.setLevelCount(parameters.levelCount);
-    }
-    this.getSpectrum(this.analyser, true);
-    this.getWaveform(this.analyser, true);
-    this.onLoading = parameters.onLoading;
-    this.onProcessEnd = parameters.onProcessEnd;
-  }
+var _BEATS3 = require('./modules/BEATS.Phase');
 
-  Interface.prototype.setLevelCount = function(levelCount) {
-    this.levelCount = levelCount;
-    this.levelStep = this.analyser.frequencyBinCount / this.levelCount;
-    return this.analyser.levels = new Float32Array(this.levelCount);
-  };
+var _BEATS4 = _interopRequireDefault(_BEATS3);
 
-  Interface.prototype.loadBuffer = function(url) {
-    var onError, onSuccess, request;
-    request = new XMLHttpRequest();
-    request.open("GET", url, true);
-    request.responseType = "arraybuffer";
-    onSuccess = (function(_this) {
-      return function(buffer) {
-        _this.buffer = buffer;
-        return _this.computeBPM();
-      };
-    })(this);
-    onError = function() {
-      throw new Error("Error decoding the file " + error);
-    };
-    request.onload = (function(_this) {
-      return function() {
-        return _this.context.decodeAudioData(request.response, onSuccess, onError);
-      };
-    })(this);
-    request.onprogress = (function(_this) {
-      return function(event) {
-        return typeof _this.onLoading === "function" ? _this.onLoading(event.loaded / event.total) : void 0;
-      };
-    })(this);
-    request.onerror = function(error) {
-      throw new Error("Error loading the file" + error);
-    };
-    return request.send();
-  };
+var _BEATS5 = require('./modules/BEATS.Modulator');
 
-  Interface.prototype.getSpectrum = function(analyser, normalized) {
-    var end, i, spectrum, start;
-    analyser.getByteFrequencyData(analyser.frequencyData);
-    spectrum = analyser.frequencyData;
-    if (normalized) {
-      i = analyser.frequencyData.length;
-      while (i--) {
-        analyser.normalizedFrequencyData[i] = analyser.frequencyData[i] / 256;
-      }
-      spectrum = analyser.normalizedFrequencyData;
-    }
-    if (this.levelCount != null) {
-      i = this.levelCount;
-      while (i--) {
-        start = i * this.levelStep;
-        end = (i + 1) * this.levelStep - 1;
-        analyser.levels[i] = this.getFrequency(spectrum, start, end);
-      }
-      spectrum = analyser.levels;
-    }
-    analyser.spectrum = spectrum;
-    return spectrum;
-  };
+var _BEATS6 = _interopRequireDefault(_BEATS5);
 
-  Interface.prototype.getWaveform = function(analyser, normalized) {
-    var i, waveform;
-    analyser.getByteTimeDomainData(analyser.timeDomainData);
-    waveform = analyser.timeDomainData;
-    if (normalized) {
-      i = analyser.timeDomainData.length;
-      while (i--) {
-        analyser.normalizedTimeDomainData[i] = (analyser.timeDomainData[i] - 128) / 128;
-      }
-      waveform = analyser.normalizedTimeDomainData;
-    }
-    analyser.waveform = waveform;
-    return waveform;
-  };
+var _BEATS7 = require('./modules/BEATS.Key');
 
-  Interface.prototype.getFrequency = function(spectrum, start, end) {
-    var i, k, ref, ref1, sum;
-    if (end - start > 1) {
-      sum = 0;
-      for (i = k = ref = start, ref1 = end; ref <= ref1 ? k <= ref1 : k >= ref1; i = ref <= ref1 ? ++k : --k) {
-        sum += spectrum[i];
-      }
-      return sum / (end - start + 1);
-    } else {
-      return spectrum[start];
-    }
-  };
+var _BEATS8 = _interopRequireDefault(_BEATS7);
 
-  Interface.prototype.getMaxFrequency = function(spectrum, start, end) {
-    var i, k, max, ref, ref1;
-    max = 0;
-    if (end == null) {
-      end = start;
-    }
-    for (i = k = ref = start, ref1 = end; ref <= ref1 ? k <= ref1 : k >= ref1; i = ref <= ref1 ? ++k : --k) {
-      if (spectrum[i] > max) {
-        max = spectrum[i];
-      }
-    }
-    return max;
-  };
+var _BEATS9 = require('./modules/BEATS.Interface');
 
-  Interface.prototype.computeBPM = function() {
-    this.BPMProcessor = new BEATS.BPMProcessor(this.buffer);
-    this.BPMProcessor.onProcessEnd = (function(_this) {
-      return function(result) {
-        _this.bpm = result;
-        return _this.onProcessEnd() != null;
-      };
-    })(this);
-    return this.BPMProcessor.start();
-  };
+var _BEATS10 = _interopRequireDefault(_BEATS9);
 
-  Interface.prototype.add = function(object) {
-    var i, key, modulator, name, parameter, results1, value, values;
-    if (object instanceof BEATS.Modulator) {
-      if (object.name == null) {
-        modulator.name = 'M|' + this.modulators.length;
-      }
-      object.context = this.context;
-      object.set();
-      object.analyser.levels = new Float32Array(this.levelCount);
-      this.getSpectrum(object.analyser, true);
-      this.getWaveform(object.analyser, true);
-      this.input.connect(object.filter);
-      this.modulators[this.modulators.length++] = object;
-    }
-    if (object instanceof BEATS.Key) {
-      if (object.name == null) {
-        object.name = 'K|' + this.keys.length;
-      }
-      object.index = this.keys.length;
-      this.keys[this.keys.length++] = object;
-    }
-    if (object instanceof BEATS.Phase) {
-      this.phases[this.phases.length++] = object;
-      this.phases.sort((function(_this) {
-        return function(a, b) {
-          if (a.time > b.time) {
-            return 1;
-          }
-          if (a.time < b.time) {
-            return -1;
-          }
-          return 0;
-        };
-      })(this));
-      object.keys = this.keys;
-      object.modulators = this.modulators;
-      object.phases = this.phases;
-      i = this.phases.length;
-      while (i--) {
-        this.phases[i].index = i;
-      }
-    }
-    this.phases[0].keys = this.keys;
-    this.phases[0].modulators = this.modulators;
-    this.phases[0].phases = this.phases;
-    i = this.keys.length;
-    while (i--) {
-      key = this.keys[i];
-      values = this.phases[0].values[key.name] = {};
-      for (name in key) {
-        value = key[name];
-        if (typeof value !== "function") {
-          values[name] = value;
-        }
-      }
-    }
-    i = this.modulators.length;
-    results1 = [];
-    while (i--) {
-      modulator = this.modulators[i];
-      values = this.phases[0].values[modulator.name] = {};
-      values.active = modulator.active;
-      results1.push((function() {
-        var ref, results2;
-        ref = modulator.filter;
-        results2 = [];
-        for (name in ref) {
-          parameter = ref[name];
-          if (name === 'frequency' || name === 'Q' || name === 'gain') {
-            results2.push(values[name] = parameter.value);
-          } else {
-            results2.push(void 0);
-          }
-        }
-        return results2;
-      })());
-    }
-    return results1;
-  };
+var _BEATS11 = require('./modules/BEATS.BPMProcessor');
 
-  Interface.prototype.remove = function(object) {
-    var i, objects, results1;
-    switch (object.constructor.name) {
-      case 'Modulator':
-        objects = this.modulators;
-        break;
-      case 'Key':
-        objects = this.keys;
-        break;
-      case 'Sequencer':
-        objects = this.sequencer;
-        break;
-      default:
-        throw new Error('Unknown object type');
-        return;
-    }
-    i = objects.length;
-    results1 = [];
-    while (i--) {
-      if (objects[i] === object) {
-        results1.push(objects.splice(i, 1));
-      } else {
-        results1.push(void 0);
-      }
-    }
-    return results1;
-  };
+var _BEATS12 = _interopRequireDefault(_BEATS11);
 
-  Interface.prototype.get = function(name) {
-    var i;
-    if (typeof name === 'string') {
-      i = this.keys.length;
-      while (i--) {
-        if (this.keys[i].name === name) {
-          return this.keys[i];
-        }
-      }
-      i = this.modulators.length;
-      while (i--) {
-        if (this.modulators[i].name === name) {
-          return this.modulators[i];
-        }
-      }
-    } else {
-      throw new Error("Can't find object named : " + name);
-    }
-  };
+var _BEATS13 = require('./modules/BEATS.GUI');
 
-  Interface.prototype.update = function() {
-    var analyser, base, base1, base2, frequency, i, key, modulator, nextPhase, nextTime, spectrum;
-    if ((this.media == null) || this.media.paused || !this.active) {
-      return;
-    }
-    this.currentTime = this.media.currentTime;
-    this.progress = this.currentTime / this.duration;
-    this.getSpectrum(this.analyser, true);
-    this.getWaveform(this.analyser, true);
-    i = this.modulators.length;
-    while (i--) {
-      modulator = this.modulators[i];
-      if (!modulator.active) {
-        continue;
-      }
-      analyser = modulator.analyser;
-      this.getSpectrum(analyser, true);
-      this.getWaveform(analyser, true);
-    }
-    i = this.keys.length;
-    while (i--) {
-      key = this.keys[i];
-      modulator = null;
-      if (key.modulator != null) {
-        modulator = this.get(key.modulator);
-      }
-      if ((modulator != null) && modulator.active) {
-        spectrum = modulator.analyser.spectrum;
-      } else {
-        spectrum = this.analyser.spectrum;
-      }
-      if (key.type === "average") {
-        frequency = this.getFrequency(spectrum, key.start, key.end);
-      } else if (key.type === "max") {
-        frequency = this.getMaxFrequency(spectrum, key.start, key.end);
-      }
-      key.update(frequency);
-    }
-    if (this.phases.length > 0) {
-      if (typeof (base = this.phases[this.position]).onUpdate === "function") {
-        base.onUpdate();
-      }
-      nextPhase = this.phases[this.position + 1];
-      nextTime = nextPhase != null ? nextPhase.time : this.duration;
-      if (this.currentTime >= nextTime) {
-        if (typeof (base1 = this.phases[this.position]).onComplete === "function") {
-          base1.onComplete();
-        }
-        if (nextPhase == null) {
-          return;
-        }
-        this.position++;
-        this.phases[this.position].initialize();
-        if (typeof (base2 = this.phases[this.position]).onStart === "function") {
-          base2.onStart();
-        }
-        return typeof this.onPhaseChange === "function" ? this.onPhaseChange() : void 0;
-      }
-    }
-  };
+var _BEATS14 = _interopRequireDefault(_BEATS13);
 
-  return Interface;
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-})();
-
-BEATS.Modulator = (function() {
-  function Modulator(type, frequency, parameters) {
-    this.type = type;
-    this.frequency = frequency;
-    this.Q = parameters.Q;
-    this.gain = parameters.gain;
-    this.name = parameters.name;
-    this.active = parameters.active;
-  }
-
-  Modulator.prototype.set = function(frequency, Q, gain) {
-    this.filter = this.context.createBiquadFilter();
-    this.analyser = this.context.createAnalyser();
-    this.filter.connect(this.analyser);
-    this.analyser.frequencyData = new Uint8Array(this.analyser.frequencyBinCount);
-    this.analyser.timeDomainData = new Uint8Array(this.analyser.frequencyBinCount);
-    this.analyser.normalizedFrequencyData = new Float32Array(this.analyser.frequencyBinCount);
-    this.analyser.normalizedTimeDomainData = new Float32Array(this.analyser.frequencyBinCount);
-    this.filter.type = this.type;
-    this.filter.frequency.value = this.frequency;
-    if ((this.filter.Q != null) && (this.Q != null)) {
-      this.filter.Q.value = this.Q;
-    }
-    if ((this.filter.gain != null) && (this.gain != null)) {
-      return this.filter.gain.value = this.gain;
-    }
-  };
-
-  return Modulator;
-
-})();
-
-BEATS.Key = (function() {
-  function Key(start, end, min, max, parameters) {
-    this.update = bind(this.update, this);
-    if (parameters == null) {
-      parameters = {};
-    }
-    this.set(start, end, min, max);
-    this.value = 0;
-    this.smoothness = parameters.smoothness || 1;
-    this.delay = parameters.delay;
-    this.timeout = null;
-    this.lower = true;
-    this.threshold = parameters.threshold;
-    this.currentThreshold = this.threshold;
-    this.type = parameters.type || 'average';
-    this.name = parameters.name;
-    this.modulator = parameters.modulator || null;
-    this.active = parameters.active;
-    this.callback = parameters.callback || null;
-  }
-
-  Key.prototype.set = function(start, end, min, max, threshold) {
-    if (start != null) {
-      this.start = start;
-    }
-    if (end != null) {
-      this.end = end;
-    }
-    if (min != null) {
-      this.min = min;
-    }
-    if (max != null) {
-      return this.max = max;
-    }
-  };
-
-  Key.prototype.update = function(frequency) {
-    var callback, value;
-    if (!this.active) {
-      this.value = 0;
-      return;
-    }
-    value = (frequency - this.min) / (this.max - this.min);
-    value = Math.min(1, Math.max(0, value));
-    if (this.smoothness <= 1) {
-      this.value = value;
-    } else {
-      this.value += (value - this.value) * (1 / this.smoothness);
-    }
-    if (!this.threshold) {
-      return;
-    }
-    if (this.value >= this.currentThreshold && this.lower) {
-      callback = (function(_this) {
-        return function() {
-          return _this.lower = true;
-        };
-      })(this);
-      this.timeout = setTimeout(callback, this.delay);
-      this.lower = false;
-      if (this.callback != null) {
-        return this.callback();
-      }
-    }
-  };
-
-  return Key;
-
-})();
-
-BEATS.Phase = (function() {
-  function Phase(time, values1, parameters) {
-    this.time = time;
-    this.values = values1;
-    this.initialize = bind(this.initialize, this);
-    if (this.values == null) {
-      this.values = {};
-    }
-    if (parameters == null) {
-      parameters = {};
-    }
-    this.name = parameters.name;
-    this.onStart = parameters.onStart;
-    this.onUpdate = parameters.onUpdate;
-    this.onComplete = parameters.onComplete;
-  }
-
-  Phase.prototype.initialize = function() {
-    var i, j, key, modulator, name, parameter, ref, results1, value, values;
-    i = 0;
-    results1 = [];
-    while (i <= this.index) {
-      ref = this.phases[i].values;
-      for (name in ref) {
-        values = ref[name];
-        j = this.keys.length;
-        while (j--) {
-          if (this.keys[j].name === name) {
-            key = this.keys[j];
-            for (parameter in values) {
-              value = values[parameter];
-              key[parameter] = value;
-            }
-          }
-        }
-        j = this.modulators.length;
-        while (j--) {
-          if (this.modulators[j].name === name) {
-            modulator = this.modulators[j];
-            for (parameter in values) {
-              value = values[parameter];
-              if (parameter === 'active') {
-                modulator.active = value;
-              } else {
-                modulator.filter[parameter].value = value;
-              }
-            }
-          }
-        }
-      }
-      results1.push(i++);
-    }
-    return results1;
-  };
-
-  return Phase;
-
-})();
-
-BEATS.BPMProcessor = (function() {
-  function BPMProcessor(buffer) {
-    this.groupByTempo = bind(this.groupByTempo, this);
-    this.identifyIntervals = bind(this.identifyIntervals, this);
-    this.process = bind(this.process, this);
-    this.start = bind(this.start, this);
-    var filter;
-    this.minThreshold = 0.3;
-    this.minPeaks = 15;
-    this.offlineContext = new OfflineAudioContext(1, buffer.length, buffer.sampleRate);
-    this.source = this.offlineContext.createBufferSource();
-    this.source.buffer = buffer;
-    filter = this.offlineContext.createBiquadFilter();
-    filter.type = 'lowpass';
-    this.source.connect(filter);
-    filter.connect(this.offlineContext.destination);
-    this.offlineContext.addEventListener('complete', this.process);
-  }
-
-  BPMProcessor.prototype.start = function() {
-    this.source.start(0);
-    return this.offlineContext.startRendering();
-  };
-
-  BPMProcessor.prototype.process = function(event) {
-    var buffer, data, intervals, max, min, peaks, tempos, threshold;
-    buffer = event.renderedBuffer;
-    data = buffer.getChannelData(0);
-    peaks = [];
-    min = BEATS.Utils.getArrayMin(data);
-    max = BEATS.Utils.getArrayMax(data);
-    threshold = min + (max - min);
-    while (peaks.length < this.minPeaks && threshold >= this.minThreshold) {
-      peaks = this.getPeaksAtThreshold(data, threshold);
-      threshold -= 0.02;
-    }
-    if (peaks.length < this.minPeaks) {
-      throw new Error('Could not find enough samples for a reliable detection');
-      return;
-    }
-    intervals = this.identifyIntervals(peaks);
-    tempos = this.groupByTempo(intervals);
-    tempos.sort(function(a, b) {
-      return b.count - a.count;
-    });
-    return typeof this.onProcessEnd === "function" ? this.onProcessEnd(tempos[0].tempo) : void 0;
-  };
-
-  BPMProcessor.prototype.getPeaksAtThreshold = function(data, threshold) {
-    var i, result;
-    result = [];
-    i = 0;
-    while (i < data.length) {
-      if (data[i] > threshold) {
-        result[result.length++] = i;
-        i += 10000;
-      }
-      i++;
-    }
-    return result;
-  };
-
-  BPMProcessor.prototype.identifyIntervals = function(peaks) {
-    var counts;
-    counts = [];
-    peaks.forEach(function(peak, index) {
-      var i, interval, result, results1;
-      i = 0;
-      results1 = [];
-      while (i < 10) {
-        interval = peaks[index + i] - peak;
-        result = counts.some(function(counts) {
-          if (counts.interval === interval) {
-            return counts.count++;
-          }
-        });
-        if (!isNaN(interval) && interval !== 0 && !result) {
-          counts[counts.length++] = {
-            interval: interval,
-            count: 1
-          };
-        }
-        results1.push(i++);
-      }
-      return results1;
-    });
-    return counts;
-  };
-
-  BPMProcessor.prototype.groupByTempo = function(counts) {
-    var results;
-    results = [];
-    counts.forEach(function(count) {
-      var foundTempo, theoreticalTempo;
-      if (count.interval === 0) {
-        return;
-      }
-      theoreticalTempo = 60 / (count.interval / 44100);
-      while (theoreticalTempo < 90) {
-        theoreticalTempo *= 2;
-      }
-      while (theoreticalTempo > 180) {
-        theoreticalTempo /= 2;
-      }
-      theoreticalTempo = Math.round(theoreticalTempo);
-      foundTempo = results.some(function(result) {
-        if (result.tempo === theoreticalTempo) {
-          return result.count += count.count;
-        }
-      });
-      if (!foundTempo) {
-        return results[results.length++] = {
-          tempo: theoreticalTempo,
-          count: count.count
-        };
-      }
-    });
-    return results;
-  };
-
-  return BPMProcessor;
-
-})();
-
-BEATS.Utils = {
-  getArrayMin: function(data) {
-    var i, min;
-    min = Infinity;
-    i = data.length;
-    while (i--) {
-      if (data[i] < min) {
-        min = data[i];
-      }
-    }
-    return min;
-  },
-  getArrayMax: function(data) {
-    var i, max;
-    max = -Infinity;
-    i = data.length;
-    while (i--) {
-      if (data[i] > max) {
-        max = data[i];
-      }
-    }
-    return max;
-  },
-  stereoToMono: function(audioBuffer) {
-    var buffer, i, leftChannel, mixedChannel, rightChannel;
-    buffer = audioBuffer;
-    if (buffer.numberOfChannels = 2) {
-      leftChannel = buffer.getChannelData(0);
-      rightChannel = buffer.getChannelData(1);
-      i = buffer.length;
-      while (i--) {
-        mixedChannel = 0.5 * (leftChannel[i] + rightChannel[i]);
-        leftChannel[i] = rightChannel[i] = mixedChannel;
-      }
-      buffer.numberOfChannels = 1;
-    }
-    return buffer;
-  }
+window.BEATS = {
+	Utils: _BEATS2.default,
+	Phase: _BEATS4.default,
+	Modulator: _BEATS6.default,
+	Key: _BEATS8.default,
+	Interface: _BEATS10.default,
+	BPMProcessor: _BEATS12.default,
+	GUI: _BEATS14.default
 };
 
-
-},{}],2:[function(require,module,exports){
-var BEATS, Draggable, GUI, Outcome, Spectrum, Track, colors, dat,
-  bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; };
-
-BEATS = require('Beats');
-
-dat = require('dat-gui');
-
-Draggable = require('Draggable');
-
-Outcome = require('gui/Outcome');
-
-Spectrum = require('gui/Spectrum');
-
-Track = require('gui/Track');
-
-colors = require('gui/colors');
-
-BEATS.GUI = GUI = (function() {
-  function GUI(beats) {
-    this.beats = beats;
-    this.resize = bind(this.resize, this);
-    this.updateKeys = bind(this.updateKeys, this);
-    this.repeatPhase = bind(this.repeatPhase, this);
-    this.changeOutput = bind(this.changeOutput, this);
-    this.pause = bind(this.pause, this);
-    this.start = bind(this.start, this);
-    this.beats.media.controls = true;
-    this.beats.media.autoplay = false;
-    this.gui = new dat.GUI();
-    document.head.appendChild(document.querySelector('.main-style'));
-    this.output = this.beats.analyser;
-    this.outcome = new Outcome(this.beats);
-    this.spectrum = new Spectrum(this.beats, this.changeOutput);
-    this.track = new Track(this.beats);
-    this.setControllers();
-    addEventListener('resize', this.resize, true);
-    addEventListener('keydown', this.pause, false);
-    this.resize();
-  }
-
-  GUI.prototype.start = function() {
-    return document.querySelector('.overlay').classList.add('hide');
-  };
-
-  GUI.prototype.pause = function(event) {
-    var media;
-    if (event.keyCode === 32) {
-      event.preventDefault();
-      media = this.beats.media;
-      if (media.paused) {
-        return media.play();
-      } else {
-        return media.pause();
-      }
-    } else {
-
-    }
-  };
-
-  GUI.prototype.changeOutput = function(output) {
-    this.beats.output.disconnect(0);
-    this.beats.output = output;
-    return this.beats.output.connect(this.beats.destination);
-  };
-
-  GUI.prototype.repeatPhase = function(value) {
-    var i, index;
-    this.loop = null;
-    i = this.phasesNames.length;
-    while (i--) {
-      if (value !== this.phasesNames[i] || this.phasesNames[i] === 'none') {
-        continue;
-      } else {
-        index = i - 1;
-      }
-    }
-    if (index == null) {
-      return;
-    }
-    this.loop = {
-      index: index,
-      start: this.beats.phases[index],
-      end: this.beats.phases[index + 1] || this.beats.duration
-    };
-    this.beats.media.currentTime = this.loop.start.time;
-    this.beats.position = this.loop.index;
-    return this.update(true);
-  };
-
-  GUI.prototype.updateKeys = function() {
-    var i, results;
-    i = this.spectrum.keys.length;
-    results = [];
-    while (i--) {
-      results.push(this.spectrum.keys[i].update());
-    }
-    return results;
-  };
-
-  GUI.prototype.setControllers = function() {
-    var filter, folder, folders, frequency, i, j, k, key, keys, modulator, modulators, modulatorsNames, phases, ref, ref1, results;
-    folders = this.gui.addFolder('General');
-    folders.add(this.beats.media, 'playbackRate', [0.5, 1.0, 1.5, 2.0]).name('playbackRate');
-    phases = {
-      repeat: null
-    };
-    this.phasesNames = ['none'];
-    i = this.beats.phases.length;
-    while (i--) {
-      this.phasesNames[this.phasesNames.length++] = ('000' + i).substr(-3);
-    }
-    folders.add(phases, 'repeat', this.phasesNames).name('repeatPhase').onChange(this.repeatPhase);
-    modulatorsNames = ['none'];
-    folders = this.gui.addFolder('Modulators');
-    modulators = this.beats.modulators;
-    for (i = j = 0, ref = this.beats.modulators.length; 0 <= ref ? j < ref : j > ref; i = 0 <= ref ? ++j : --j) {
-      modulator = this.beats.modulators[i];
-      folder = folders.addFolder(modulator.name);
-      modulatorsNames[modulatorsNames.length++] = modulator.name;
-      filter = modulator.filter;
-      frequency = folder.add(filter.frequency, 'value', 0, 40000);
-      frequency.name('frequency');
-      folder.add(filter.Q, 'value', 0, 10).name('Q');
-      folder.add(filter.gain, 'value', 0, 10).name('gain');
-    }
-    folders = this.gui.addFolder('Keys');
-    keys = this.beats.keys;
-    results = [];
-    for (i = k = 0, ref1 = this.beats.keys.length; 0 <= ref1 ? k < ref1 : k > ref1; i = 0 <= ref1 ? ++k : --k) {
-      key = this.beats.keys[i];
-      folder = folders.addFolder(key.name);
-      folder.add(key, 'active').listen().onChange(this.updateKeys);
-      folder.add(key, 'type', ['average', 'max']).listen().onChange(this.updateKeys);
-      folder.add(key, 'start', 0, this.levelCount).listen().step(1).onChange(this.updateKeys);
-      folder.add(key, 'end', 0, this.levelCount).listen().step(1).onChange(this.updateKeys);
-      folder.add(key, 'min', 0, 1).listen().step(0.01).onChange(this.updateKeys);
-      folder.add(key, 'max', 0, 1).listen().step(0.01).onChange(this.updateKeys);
-      folder.add(key, 'smoothness', 1, 100).listen().onChange(this.updateKeys);
-      results.push(folder.add(key, 'modulator', modulatorsNames).listen().onChange(this.updateKeys));
-    }
-    return results;
-  };
-
-  GUI.prototype.update = function(force) {
-    if ((this.loop != null) && this.beats.currentTime >= this.loop.end.time) {
-      this.beats.media.currentTime = this.loop.start.time;
-      this.beats.position = this.loop.index;
-    }
-    if (!this.outcome.initialize) {
-      force = true;
-      this.start();
-    }
-    if ((this.beats.media != null) && !this.beats.media.paused || force) {
-      this.outcome.update();
-      this.spectrum.update(this.beats.output);
-      this.track.update();
-      return force = false;
-    }
-  };
-
-  GUI.prototype.resize = function() {
-    this.outcome.resize();
-    this.spectrum.resize();
-    return this.track.resize();
-  };
-
-  return GUI;
-
-})();
-
-
-},{"Beats":1,"Draggable":10,"dat-gui":11,"gui/Outcome":5,"gui/Spectrum":7,"gui/Track":8,"gui/colors":9}],3:[function(require,module,exports){
-var BEATS, audio, context, initialize, url;
-
-BEATS = require('Beats');
-
-require('GUI');
-
-audio = new Audio();
-
-context = new AudioContext;
-
-url = 'audio/Walk.mp3';
-
-initialize = function() {
-  var beats, beatsGUI, update;
-  audio.removeEventListener('canplaythrough', initialize);
-  update = function() {
-    beats.update();
-    beatsGUI.update();
-    return requestAnimationFrame(update);
-  };
-  beats = new BEATS.Interface(context, audio, {
-    destination: context.destination,
-    fftSize: 1024,
-    levelCount: 128,
-    mono: false,
-    onProcessEnd: update
-  });
-  beats.add(new BEATS.Modulator('lowpass', 440, {
-    name: 'lowpass',
-    active: true,
-    Q: 1,
-    gain: 2
-  }));
-  beats.add(new BEATS.Modulator('highpass', 10000, {
-    name: 'highpass1',
-    active: true,
-    Q: 1,
-    gain: 2
-  }));
-  beats.add(new BEATS.Modulator('highpass', 2000, {
-    name: 'highpass2',
-    active: true,
-    Q: 1,
-    gain: 2
-  }));
-  beats.add(new BEATS.Key(1.0, 2.0, 0.8, 0.9, {
-    name: 'kick',
-    modulator: 'lowpass',
-    active: false,
-    threshold: 0.9,
-    delay: 200,
-    callback: function() {
-      return console.log('Kicked');
-    }
-  }));
-  beats.add(new BEATS.Key(90, 120, 0.1, 0.35, {
-    name: 'hit-hat',
-    modulator: 'highpass1',
-    active: false
-  }));
-  beats.add(new BEATS.Key(50, 90, 0.4, 0.5, {
-    name: 'snare',
-    modulator: 'highpass2',
-    type: 'max',
-    active: false,
-    threshold: 0.8,
-    delay: 200
-  }));
-  beats.add(new BEATS.Key(12, 30, 0.1, 0.35, {
-    name: 'piano',
-    smoothness: 10,
-    active: true
-  }));
-  beats.add(new BEATS.Key(68, 88, 0.08, 0.3, {
-    name: 'effect',
-    smoothness: 15,
-    active: true
-  }));
-  beats.add(new BEATS.Phase(27.550, {
-    'kick': {
-      active: true,
-      min: 0.88
-    },
-    'snare': {
-      active: true
-    },
-    'effect': {
-      active: false
-    },
-    'piano': {
-      active: false
-    }
-  }));
-  beats.add(new BEATS.Phase(55.000, {
-    'hit-hat': {
-      active: true
-    }
-  }));
-  beats.add(new BEATS.Phase(82.500, {
-    'kick': {
-      start: 1,
-      end: 2,
-      min: 0.88,
-      max: 0.92
-    },
-    'lowpass': {
-      frequency: 100
-    }
-  }));
-  return beatsGUI = new BEATS.GUI(beats);
-};
-
-audio.addEventListener('canplaythrough', initialize);
-
-audio.src = url;
-
-
-},{"Beats":1,"GUI":2}],4:[function(require,module,exports){
-var Key,
-  bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; };
-
-module.exports = Key = (function() {
-  function Key(values, bounds, color, template) {
-    this.values = values;
-    this.bounds = bounds;
-    this.resize = bind(this.resize, this);
-    this.element = template.cloneNode(true);
-    this.element.className = 'key';
-    this.element.style.boxShadow = "0 0 0 1px " + color + " inset";
-    this.name = this.element.querySelector('.name');
-    this.name.innerText = this.values.name;
-    this.handle = this.element.querySelector('.handle');
-  }
-
-  Key.prototype.set = function() {
-    var self;
-    self = this;
-    this.update();
-    Draggable.create(this.element, {
-      bounds: this.bounds,
-      liveSnap: {
-        x: (function(_this) {
-          return function(value) {
-            return _this.levelSize * Math.round(value / _this.levelSize);
-          };
-        })(this)
-      },
-      onDrag: function() {
-        var difference;
-        difference = self.values.max - self.values.min;
-        self.values.max = 1 - this.y / self.canvasHeight;
-        self.values.min = self.values.max - difference;
-        difference = self.values.end - self.values.start;
-        self.values.start = Math.round(this.x / self.levelSize);
-        return self.values.end = self.values.start + difference;
-      }
-    });
-    return Draggable.create(this.handle, {
-      bounds: this.bounds,
-      type: 'top, left',
-      onPress: function(event) {
-        return event.stopPropagation();
-      },
-      onDrag: function(event) {
-        self.values.min = self.values.max - this.y / self.canvasHeight;
-        self.values.end = self.values.start + Math.round(this.x / self.levelSize);
-        return TweenLite.set(this.target.parentNode, {
-          width: this.x,
-          height: this.y
-        });
-      },
-      liveSnap: {
-        x: (function(_this) {
-          return function(value) {
-            return _this.levelSize * Math.round(value / _this.levelSize);
-          };
-        })(this)
-      }
-    });
-  };
-
-  Key.prototype.update = function() {
-    var height, width, x, y;
-    if (this.values.active) {
-      if (!this.element.classList.contains('active')) {
-        this.element.classList.add('active');
-      }
-    } else {
-      this.element.classList.remove('active');
-    }
-    x = this.values.start * this.levelSize;
-    y = (1 - this.values.max) * this.canvasHeight;
-    width = (this.values.end - this.values.start) * this.levelSize;
-    height = (this.values.max - this.values.min) * this.canvasHeight;
-    this.element.style.height = height + 'px';
-    this.element.style.width = width + 'px';
-    return this.element.style.transform = 'translate3d( ' + x + 'px,' + y + 'px, 0px )';
-  };
-
-  Key.prototype.resize = function(levelSize, canvasHeight) {
-    this.levelSize = levelSize;
-    this.canvasHeight = canvasHeight;
-    this.update();
-    return this.set();
-  };
-
-  return Key;
-
-})();
-
-
-},{}],5:[function(require,module,exports){
-var Outcome, colors,
-  bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; };
-
-colors = require('gui/colors');
-
-module.exports = Outcome = (function() {
-  function Outcome(beats) {
-    var button, buttonTemplate, grid, i, j, k, keyTemplate, l, level, line, linesCount, name, output, ref, ref1;
-    this.beats = beats;
-    this.draw = bind(this.draw, this);
-    this.toggle = bind(this.toggle, this);
-    this.highlightCallback = bind(this.highlightCallback, this);
-    this.container = document.querySelector('.graph-keys');
-    this.graphControls = this.container.querySelector('.graph-keys-controls');
-    this.grid = this.container.querySelector('.grid');
-    this.canvas = this.container.querySelector('canvas');
-    this.context = this.canvas.getContext('2d');
-    this.controls = document.querySelector('.controls');
-    this.media = this.beats.input.mediaElement;
-    this.media.className = 'audio';
-    this.controls.appendChild(this.media);
-    this.bpm = document.createElement('div');
-    this.bpm.className = 'bpm';
-    this.controls.appendChild(this.bpm);
-    this.outputs = [];
-    this.values = [];
-    this.levels = [];
-    this.thresholds = [];
-    this.callbacks = [];
-    this.circles = [];
-    keyTemplate = this.controls.querySelector('.template');
-    buttonTemplate = this.graphControls.querySelector('.template');
-    this.keys = this.beats.keys;
-    this.buttons = [];
-    this.datas = [];
-    for (i = k = 0, ref = this.keys.length; 0 <= ref ? k < ref : k > ref; i = 0 <= ref ? ++k : --k) {
-      output = keyTemplate.cloneNode(true);
-      output.className = 'output';
-      name = output.querySelector('.name');
-      name.style.color = colors[i];
-      name.innerText = this.keys[i].name;
-      this.controls.appendChild(output);
-      this.outputs[this.outputs.length++] = output;
-      this.values[this.values.length++] = output.querySelector('.value');
-      this.thresholds[this.thresholds.length++] = output.querySelector('.threshold');
-      this.callbacks[this.callbacks.length++] = output.querySelector('.callback');
-      this.circles[this.circles.length++] = output.querySelector('.circle');
-      level = this.levels[this.levels.length++] = output.querySelector('.level');
-      button = document.createElement('div');
-      button.innerText = this.keys[i].name;
-      button.style.color = colors[i];
-      button.className = 'button-graph button';
-      if (this.keys[i].active) {
-        button.classList.add('active');
-      }
-      this.graphControls.appendChild(button);
-      button.addEventListener('click', this.toggle);
-      this.buttons[i] = button;
-      this.datas[i] = [];
-    }
-    this.keys.forEach((function(_this) {
-      return function(key, index) {
-        return key.callback = function() {
-          return _this.highlightCallback(key);
-        };
-      };
-    })(this));
-    grid = this.container.querySelector('.grid');
-    linesCount = 10;
-    for (j = l = 0, ref1 = linesCount; 0 <= ref1 ? l <= ref1 : l >= ref1; j = 0 <= ref1 ? ++l : --l) {
-      line = document.createElement('div');
-      if (j % 5 === 0) {
-        line.className = "line h half";
-      } else {
-        line.className = "line h";
-      }
-      line.style.top = (100 / linesCount) * j + "%";
-      grid.appendChild(line);
-    }
-  }
-
-  Outcome.prototype.highlightCallback = function(key) {
-    var callback;
-    callback = this.callbacks[key.index];
-    this.setCallbackStyle(callback, colors[key.index], 1);
-    return setTimeout((function(_this) {
-      return function() {
-        return _this.setCallbackStyle(callback, '#ffffff', 0.5);
-      };
-    })(this), 250);
-  };
-
-  Outcome.prototype.setCallbackStyle = function(callback, color, opacity) {
-    callback.style.opacity = opacity;
-    return callback.style.color = color;
-  };
-
-  Outcome.prototype.toggle = function(event) {
-    event.currentTarget.classList.toggle('active');
-    return this.update();
-  };
-
-  Outcome.prototype.update = function() {
-    var i, key, results;
-    this.context.clearRect(0, 0, this.width, this.canvas.height);
-    if (!this.initialize) {
-      this.bpm.textContent = this.beats.bpm + ' BPM';
-      this.initialize = true;
-    }
-    i = this.beats.keys.length;
-    results = [];
-    while (i--) {
-      key = this.beats.keys[i];
-      this.values[i].innerText = key.value.toFixed(3);
-      if (key.threshold != null) {
-        this.thresholds[i].style.height = 100 * key.currentThreshold + "%";
-        this.thresholds[i].style.display = "block";
-        this.callbacks[i].style.top = 100 - 100 * key.currentThreshold + "%";
-        this.callbacks[i].style.display = "block";
-      } else {
-        this.thresholds[i].style.display = "none";
-        this.callbacks[i].style.display = "none";
-      }
-      if (key.active) {
-        this.outputs[i].style.opacity = 1.0;
-        this.levels[i].style.height = 100 * key.value + "%";
-        this.circles[i].style.transform = 'scale(' + key.value + ')';
-      } else {
-        this.outputs[i].style.opacity = 0.2;
-      }
-      if (this.datas[i].length >= this.waveCountKeys) {
-        this.datas[i].shift();
-      }
-      this.datas[i][this.datas[i].length++] = key.value;
-      if (this.buttons[i].classList.contains('active')) {
-        results.push(this.draw(key, this.datas[i], colors[i]));
-      } else {
-        results.push(void 0);
-      }
-    }
-    return results;
-  };
-
-  Outcome.prototype.draw = function(key, datas, color) {
-    var i, k, ref, y;
-    this.context.strokeStyle = color;
-    this.context.beginPath();
-    this.context.setLineDash([]);
-    for (i = k = 0, ref = this.waveCountKeys; 0 <= ref ? k < ref : k > ref; i = 0 <= ref ? ++k : --k) {
-      y = -datas[i] * this.height + this.height;
-      this.context.lineTo(i * this.waveSizeKeys, y);
-    }
-    this.context.stroke();
-    if (key.threshold == null) {
-      return;
-    }
-    this.context.beginPath();
-    this.context.strokeStyle = color;
-    y = -key.threshold * this.height + this.height;
-    this.context.setLineDash([5, 5]);
-    this.context.moveTo(0, y);
-    this.context.lineTo(this.width, y);
-    return this.context.stroke();
-  };
-
-  Outcome.prototype.resize = function() {
-    this.width = this.canvas.width = this.canvas.parentNode.clientWidth;
-    this.height = this.canvas.height = this.grid.clientHeight;
-    this.waveCountKeys = 300;
-    return this.waveSizeKeys = this.width / this.waveCountKeys;
-  };
-
-  return Outcome;
-
-})();
-
-
-},{"gui/colors":9}],6:[function(require,module,exports){
-var Phase,
-  bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; };
-
-module.exports = Phase = (function() {
-  function Phase(values, mediaDuration, track, template) {
-    var self;
-    this.values = values;
-    this.mediaDuration = mediaDuration;
-    this.track = track;
-    this.resize = bind(this.resize, this);
-    this.set = bind(this.set, this);
-    this.onDrag = bind(this.onDrag, this);
-    this.element = template.cloneNode(true);
-    this.element.className = "sequence";
-    this.text = this.element.querySelector('.value');
-    self = this;
-    this.draggable = new Draggable(this.element, {
-      bounds: this.track.sequences,
-      type: 'x',
-      lockAxis: true,
-      cursor: 'ew-resize',
-      onPress: (function(_this) {
-        return function() {
-          return _this.track.dragged = true;
-        };
-      })(this),
-      onRelease: (function(_this) {
-        return function() {
-          return _this.track.dragged = false;
-        };
-      })(this),
-      onDrag: function() {
-        return self.onDrag(this.x);
-      }
-    });
-  }
-
-  Phase.prototype.onDrag = function(x) {
-    var time;
-    time = x / this.canvasWidth * this.mediaDuration;
-    time = Math.round(time * 1000) * 0.001;
-    this.text.textContent = time.toFixed(3);
-    return this.values.time = time;
-  };
-
-  Phase.prototype.set = function() {
-    var ref;
-    TweenMax.set(this.element, {
-      x: this.values.time / this.mediaDuration * this.canvasWidth
-    });
-    this.text.textContent = this.values.time.toFixed(3);
-    return (ref = this.draggable) != null ? ref.update() : void 0;
-  };
-
-  Phase.prototype.resize = function(canvasWidth) {
-    this.canvasWidth = canvasWidth;
-    return this.set();
-  };
-
-  return Phase;
-
-})();
-
-
-},{}],7:[function(require,module,exports){
-var Key, Spectrum, TweenMax, colors,
-  bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; };
-
-TweenMax = require('gsap');
-
-require('Draggable');
-
-Key = require('gui/Key');
-
-colors = require('gui/colors');
-
-module.exports = Spectrum = (function() {
-  function Spectrum(beats, changeOutput) {
-    var button, i, j, k, l, line, linesCount, m, ref, ref1, ref2, ref3, template;
-    this.beats = beats;
-    this.changeOutput = changeOutput;
-    this.getAnalyser = bind(this.getAnalyser, this);
-    this.container = document.querySelector('.graph-spectrum');
-    this.graphControls = this.container.querySelector('.graph-spectrum-controls');
-    this.grid = this.container.querySelector('.grid');
-    this.canvas = this.container.querySelector('canvas');
-    this.context = this.canvas.getContext('2d');
-    this.buttons = [this.graphControls.querySelector('.active')];
-    this.current = this.buttons[0];
-    button = this.container.querySelector('.button-waveform');
-    this.showWaveform = false;
-    if (this.showWaveform) {
-      button.classList.add('active');
-    }
-    button.addEventListener('click', (function(_this) {
-      return function(event) {
-        if (event.target.classList.contains('active')) {
-          _this.showWaveform = false;
-          return event.target.classList.remove('active');
-        } else {
-          _this.showWaveform = true;
-          return event.target.classList.add('active');
-        }
-      };
-    })(this));
-    this.keys = [];
-    template = this.container.querySelector('.template');
-    for (i = j = 0, ref = this.beats.keys.length; 0 <= ref ? j < ref : j > ref; i = 0 <= ref ? ++j : --j) {
-      this.keys[i] = new Key(this.beats.keys[i], this.grid, colors[i], template);
-      this.grid.appendChild(this.keys[i].element);
-    }
-    for (i = k = 0, ref1 = this.beats.modulators.length; 0 <= ref1 ? k < ref1 : k > ref1; i = 0 <= ref1 ? ++k : --k) {
-      button = document.createElement('div');
-      button.textContent = this.beats.modulators[i].name;
-      button.className = 'button-graph button';
-      this.graphControls.appendChild(button);
-      this.buttons[i + 1] = button;
-    }
-    i = this.buttons.length;
-    while (i--) {
-      this.buttons[i].addEventListener('click', this.getAnalyser);
-    }
-    linesCount = 20;
-    for (i = l = 0, ref2 = linesCount; 0 <= ref2 ? l <= ref2 : l >= ref2; i = 0 <= ref2 ? ++l : --l) {
-      line = document.createElement('div');
-      if (i % 10 === 0) {
-        line.className = "line h half";
-      } else {
-        line.className = "line h ";
-      }
-      line.style.top = (100 / linesCount) * i + "%";
-      this.grid.appendChild(line);
-    }
-    this.lines = [];
-    for (i = m = 0, ref3 = this.beats.levelCount; 0 <= ref3 ? m <= ref3 : m >= ref3; i = 0 <= ref3 ? ++m : --m) {
-      line = document.createElement('div');
-      line.className = "line v";
-      this.lines[this.lines.length++] = line;
-      this.grid.appendChild(line);
-    }
-  }
-
-  Spectrum.prototype.getAnalyser = function(event) {
-    var i, modulator, name, output, ref, results;
-    if ((ref = this.current) != null) {
-      ref.classList.remove('active');
-    }
-    this.current = event.currentTarget;
-    name = this.current.textContent;
-    this.current.classList.add('active');
-    modulator = this.beats.get(name);
-    if (name === 'main') {
-      output = this.beats.analyser;
-    } else {
-      output = modulator.analyser;
-    }
-    this.changeOutput(output);
-    this.frequencyHz = null;
-    this.magnitude = null;
-    this.phase = null;
-    if (modulator != null) {
-      this.filter = modulator.filter;
-      this.frequencyBars = 1000;
-      this.frequencies = new Float32Array(this.frequencyBars);
-      this.magnitude = new Float32Array(this.frequencyBars);
-      this.phase = new Float32Array(this.frequencyBars);
-      i = this.frequencyBars;
-      results = [];
-      while (i--) {
-        results.push(this.frequencies[i] = 2000 / this.frequencyBars * (i + 1));
-      }
-      return results;
-    }
-  };
-
-  Spectrum.prototype.update = function(output) {
-    var barWidth, height, i, results, step, width, x, y;
-    this.context.clearRect(0, 0, this.width, this.height);
-    i = this.levelCount;
-    while (i--) {
-      this.context.fillStyle = 'rgba( 255, 255, 255, 0.15 )';
-      if (output.spectrum[i] > 0) {
-        x = i * this.levelSize;
-        height = output.spectrum[i] * this.height;
-        width = this.levelSize;
-        y = this.height - height;
-        this.context.fillRect(x, y, width, height);
-      }
-    }
-    if (this.magnitude != null) {
-      this.filter.getFrequencyResponse(this.frequencies, this.magnitude, this.phase);
-      barWidth = this.width / this.frequencyBars;
-      this.context.strokeStyle = 'rgba( 255, 255, 255, 0.8 )';
-      this.context.beginPath();
-      this.context.setLineDash([2, 2]);
-      step = 0;
-      while (step < this.frequencyBars) {
-        this.context.lineTo(step * barWidth, this.height - this.magnitude[step] * 90);
-        step++;
-      }
-      this.context.stroke();
-      this.context.strokeStyle = 'rgba( 255, 255, 255, 0.2 )';
-      this.context.beginPath();
-      step = 0;
-      while (step < this.frequencyBars) {
-        this.context.lineTo(step * barWidth, this.height - (this.phase[step] * 90 + 300) / Math.PI);
-        step++;
-      }
-      this.context.stroke();
-      this.context.setLineDash([]);
-    }
-    if (this.showWaveform) {
-      this.context.strokeStyle = "rgba( 200, 200, 200, 0.95 )";
-      this.context.beginPath();
-      i = this.waveCount;
-      while (i--) {
-        height = output.waveform[i] * this.height * 0.5 + this.height * 0.5;
-        this.context.lineTo(i * this.waveSize, height);
-      }
-      this.context.stroke();
-    }
-    i = this.keys.length;
-    results = [];
-    while (i--) {
-      results.push(this.keys[i].update());
-    }
-    return results;
-  };
-
-  Spectrum.prototype.resize = function() {
-    var i, results;
-    this.width = this.canvas.width = this.container.clientWidth;
-    this.height = this.canvas.height = 300;
-    this.levelCount = this.beats.levelCount || this.beats.analyser.frequencyData.length;
-    this.levelSize = this.width / this.levelCount;
-    this.waveCount = this.beats.analyser.timeDomainData.length;
-    this.waveSize = this.width / this.waveCount;
-    i = this.lines.length;
-    while (i--) {
-      this.lines[i].style.left = this.levelSize * i + "px";
-    }
-    i = this.keys.length;
-    results = [];
-    while (i--) {
-      results.push(this.keys[i].resize(this.levelSize, this.height));
-    }
-    return results;
-  };
-
-  return Spectrum;
-
-})();
-
-
-},{"Draggable":10,"gsap":14,"gui/Key":4,"gui/colors":9}],8:[function(require,module,exports){
-var Phase, Track,
-  bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; };
-
-Phase = require('gui/Phase');
-
-module.exports = Track = (function() {
-  function Track(beats) {
-    var i, k, ref, template;
-    this.beats = beats;
-    this.moveTo = bind(this.moveTo, this);
-    this.removeListener = bind(this.removeListener, this);
-    this.addListener = bind(this.addListener, this);
-    this.onScroll = bind(this.onScroll, this);
-    this.draw = bind(this.draw, this);
-    this.set = bind(this.set, this);
-    this.container = document.querySelector('.track');
-    this.name = this.container.querySelector('.container-name');
-    this.progress = document.querySelector('.progress');
-    this.time = this.progress.querySelector('.time');
-    this.nodes = [];
-    this.values = [];
-    this.scale = 3;
-    this.canvas = this.container.querySelector('canvas');
-    this.context = this.canvas.getContext('2d');
-    this.container.addEventListener('mousedown', this.addListener);
-    this.sequences = this.container.querySelector('.sequences');
-    template = this.container.querySelector('.template');
-    this.phases = [];
-    for (i = k = 0, ref = this.beats.phases.length; 0 <= ref ? k < ref : k > ref; i = 0 <= ref ? ++k : --k) {
-      this.phases[i] = new Phase(this.beats.phases[i], this.beats.media.duration, this, template);
-      this.sequences.appendChild(this.phases[i].element);
-    }
-    this.sequences.addEventListener('scroll', this.onScroll);
-    this.onScroll();
-  }
-
-  Track.prototype.set = function() {};
-
-  Track.prototype.resample = function(width, audioData) {
-    var buckIndex, i, j, max, min, res, resampled, sampleCount, value;
-    resampled = new Float64Array(width * 6);
-    i = j = 0;
-    buckIndex = 0;
-    min = 1e6;
-    max = -1e6;
-    value = 0;
-    res = 0;
-    sampleCount = audioData.length;
-    i = 0;
-    while (i < sampleCount) {
-      buckIndex = 0 | width * i / sampleCount;
-      buckIndex *= 6;
-      value = audioData[i];
-      if (value > 0) {
-        resampled[buckIndex] += value;
-        resampled[buckIndex + 1] += 1;
-      } else if (value < 0) {
-        resampled[buckIndex + 3] += value;
-        resampled[buckIndex + 4] += 1;
-      }
-      if (value < min) {
-        min = value;
-      }
-      if (value > max) {
-        max = value;
-      }
-      i++;
-    }
-    i = j = 0;
-    while (i < width) {
-      if (resampled[j + 1] !== 0) {
-        resampled[j] /= resampled[j + 1];
-      }
-      if (resampled[j + 4] !== 0) {
-        resampled[j + 3] /= resampled[j + 4];
-      }
-      i++;
-      j += 6;
-    }
-    i = 0;
-    while (i < audioData.length) {
-      buckIndex = 0 | width * i / audioData.length;
-      buckIndex *= 6;
-      value = audioData[i];
-      if (value > 0) {
-        resampled[buckIndex + 2] += Math.abs(resampled[buckIndex] - value);
-      } else if (value < 0) {
-        resampled[buckIndex + 5] += Math.abs(resampled[buckIndex + 3] - value);
-      }
-      i++;
-    }
-    i = j = 0;
-    while (i < width) {
-      if (resampled[j + 1]) {
-        resampled[j + 2] /= resampled[j + 1];
-      }
-      if (resampled[j + 4]) {
-        resampled[j + 5] /= resampled[j + 4];
-      }
-      i++;
-      j += 6;
-    }
-    return resampled;
-  };
-
-  Track.prototype.draw = function() {
-    var i, j, resampledData, results, span;
-    if ((this.beats.buffer == null) || this.done) {
-      return;
-    }
-    this.done = true;
-    span = this.container.querySelector('.container-name span');
-    span.innerText = '';
-    resampledData = this.resample(this.width * this.scale, this.beats.buffer.getChannelData(0));
-    this.context.translate(0.5, this.height * 0.5);
-    this.context.scale(1, 100);
-    i = 0;
-    results = [];
-    while (i < this.width * this.scale) {
-      j = i * 6;
-      this.context.strokeStyle = '#ffffff';
-      this.context.beginPath();
-      this.context.moveTo(i, resampledData[j] - resampledData[j + 2]);
-      this.context.lineTo(i, resampledData[j + 3] + resampledData[j + 5]);
-      this.context.stroke();
-      this.context.beginPath();
-      this.context.moveTo(i, resampledData[j] - resampledData[j + 2]);
-      this.context.lineTo(i, resampledData[j] + resampledData[j + 2]);
-      this.context.stroke();
-      this.context.beginPath();
-      this.context.moveTo(i, resampledData[j + 3] + resampledData[j + 5]);
-      this.context.lineTo(i, resampledData[j + 3] - resampledData[j + 5]);
-      this.context.stroke();
-      results.push(i++);
-    }
-    return results;
-  };
-
-  Track.prototype.onScroll = function() {
-    if (this.sequences.scrollLeft <= 10) {
-      this.container.classList.add('hide-left');
-    } else {
-      this.container.classList.remove('hide-left');
-    }
-    if (this.sequences.scrollLeft >= this.sequences.scrollWidth - 10) {
-      return this.container.classList.add('hide-right');
-    } else {
-      return this.container.classList.remove('hide-right');
-    }
-  };
-
-  Track.prototype.addListener = function(event) {
-    if (this.dragged) {
-      return;
-    }
-    this.moveTo(event);
-    this.container.addEventListener('mousemove', this.moveTo);
-    return this.container.addEventListener('mouseup', this.removeListener);
-  };
-
-  Track.prototype.removeListener = function() {
-    this.container.removeEventListener('mousemove', this.moveTo);
-    return this.container.removeEventListener('mouseup', this.removeListener);
-  };
-
-  Track.prototype.moveTo = function(event) {
-    var currentTime, i, nextPhase, nextTime, phase, progress;
-    progress = (event.clientX + this.sequences.scrollLeft - this.container.offsetLeft) / this.canvas.clientWidth;
-    this.beats.media.currentTime = progress * this.beats.media.duration;
-    i = this.beats.phases.length;
-    while (i--) {
-      phase = this.beats.phases[i];
-      currentTime = this.beats.media.currentTime;
-      nextPhase = this.beats.phases[i + 1];
-      nextTime = nextPhase != null ? nextPhase.time : this.beats.duration;
-      if (currentTime >= phase.time && currentTime <= nextTime && i !== this.beats.position) {
-        this.beats.phases[i].initialize();
-        this.beats.position = i;
-      }
-    }
-    if (this.beats.media.paused) {
-      return this.update();
-    }
-  };
-
-  Track.prototype.update = function() {
-    var value;
-    value = this.beats.media.currentTime / this.beats.media.duration;
-    this.progress.style.left = value * 100 * this.scale + '%';
-    this.time.innerText = this.beats.media.currentTime.toFixed(3);
-    return this.draw();
-  };
-
-  Track.prototype.resize = function() {
-    var i;
-    this.width = this.container.clientWidth;
-    this.height = this.container.clientHeight - this.name.offsetHeight;
-    this.canvasWidth = this.width * this.scale;
-    this.canvas.height = this.height;
-    this.canvas.width = this.canvasWidth;
-    i = this.phases.length;
-    while (i--) {
-      this.phases[i].resize(this.canvasWidth);
-    }
-    this.done = false;
-    this.draw();
-    this.update();
-    return this.set();
-  };
-
-  return Track;
-
-})();
-
-
-},{"gui/Phase":6}],9:[function(require,module,exports){
-module.exports = ['#1abc9c', '#2ecc71', '#3498db', '#9b59b6', '#f1c40f', '#e67e22', '#e74c3c'];
-
-
-},{}],10:[function(require,module,exports){
-(function (global){
-/*!
- * VERSION: 0.13.0
- * DATE: 2015-03-13
- * UPDATES AND DOCS AT: http://greensock.com
- *
- * Requires TweenLite and CSSPlugin version 1.16.1 or later (TweenMax contains both TweenLite and CSSPlugin). ThrowPropsPlugin is required for momentum-based continuation of movement after the mouse/touch is released (ThrowPropsPlugin is a membership benefit of Club GreenSock - http://greensock.com/club/).
- *
- * @license Copyright (c) 2008-2015, GreenSock. All rights reserved.
- * This work is subject to the terms at http://greensock.com/standard-license or for
- * Club GreenSock members, the software agreement that was issued with your membership.
- *
- * @author: Jack Doyle, jack@greensock.com
- */
-
-var gsap = require('gsap');
-
-var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(global) !== "undefined") ? global : this || window; //helps ensure compatibility with AMD/RequireJS and CommonJS/Node
-(_gsScope._gsQueue || (_gsScope._gsQueue = [])).push( function() {
-
-	"use strict";
-
-	_gsScope._gsDefine("utils.Draggable", ["events.EventDispatcher","TweenLite"], function(EventDispatcher, TweenLite) {
-
-		var _tempVarsXY = {css:{}}, //speed optimization - we reuse the same vars object for x/y TweenLite.set() calls to minimize garbage collection tasks and improve performance.
-			_tempVarsX = {css:{}},
-			_tempVarsY = {css:{}},
-			_tempVarsRotation = {css:{}},
-			_globals = _gsScope._gsDefine.globals,
-			_tempEvent = {}, //for populating with pageX/pageY in old versions of IE
-			_doc = document,
-			_docElement = _doc.documentElement || {},
-			_emptyArray = [],
-			_emptyFunc = function() { return false; },
-			_RAD2DEG = 180 / Math.PI,
-			_max = 999999999999999,
-			_getTime = Date.now || function() {return new Date().getTime();},
-			_isOldIE = !!(!_doc.addEventListener && _doc.all),
-			_placeholderDiv = _doc.createElement("div"),
-			_renderQueue = [],
-			_lookup = {}, //when a Draggable is created, the target gets a unique _gsDragID property that allows gets associated with the Draggable instance for quick lookups in Draggable.get(). This avoids circular references that could cause gc problems.
-			_lookupCount = 0,
-			_clickableTagExp = /^(?:a|input|textarea|button|select)$/i,
-			_dragCount = 0, //total number of elements currently being dragged
-			_prefix,
-			_isMultiTouching,
-			_isAndroid = (navigator.userAgent.toLowerCase().indexOf("android") !== -1), //Android handles touch events in an odd way and it's virtually impossible to "feature test" so we resort to UA sniffing
-			_lastDragTime = 0,
-			_windowProxy = {}, //memory/performance optimization - we reuse this object during autoScroll to store window-related bounds/offsets.
-			_slice = function(a) { //don't use Array.prototype.slice.call(target, 0) because that doesn't work in IE8 with a NodeList that's returned by querySelectorAll()
-				if (typeof(a) === "string") {
-					a = TweenLite.selector(a);
+},{"./modules/BEATS.BPMProcessor":2,"./modules/BEATS.GUI":3,"./modules/BEATS.Interface":4,"./modules/BEATS.Key":5,"./modules/BEATS.Modulator":6,"./modules/BEATS.Phase":7,"./modules/BEATS.Utils":8}],2:[function(require,module,exports){
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+	value: true
+});
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+var BPMProcessor = function () {
+	function BPMProcessor(buffer) {
+		_classCallCheck(this, BPMProcessor);
+
+		this.start = this.start.bind(this);
+		this.process = this.process.bind(this);
+		this.identifyIntervals = this.identifyIntervals.bind(this);
+		this.groupByTempo = this.groupByTempo.bind(this);
+		this.minThreshold = 0.3;
+		this.minPeaks = 15;
+
+		this.offlineContext = new OfflineAudioContext(1, buffer.length, buffer.sampleRate);
+
+		this.source = this.offlineContext.createBufferSource();
+		this.source.buffer = buffer;
+
+		//# Pipe the buffer into the filter
+		var filter = this.offlineContext.createBiquadFilter();
+		filter.type = 'lowpass';
+		this.source.connect(filter);
+
+		//# And the filter into the offline context
+		filter.connect(this.offlineContext.destination);
+
+		//# Process the data when the context finish rendering
+		this.offlineContext.addEventListener('complete', this.process);
+	}
+
+	_createClass(BPMProcessor, [{
+		key: 'start',
+		value: function start() {
+			this.source.start(0);
+			return this.offlineContext.startRendering();
+		}
+	}, {
+		key: 'process',
+		value: function process(event) {
+			var buffer = event.renderedBuffer;
+
+			//# Get a Float32Array containing the PCM data
+			var data = buffer.getChannelData(0);
+
+			var peaks = [];
+
+			//# Track a threshold volume level
+			var min = BEATS.Utils.getArrayMin(data);
+			var max = BEATS.Utils.getArrayMax(data);
+
+			var threshold = min + (max - min);
+
+			while (peaks.length < this.minPeaks && threshold >= this.minThreshold) {
+				peaks = this.getPeaksAtThreshold(data, threshold);
+				threshold -= 0.02;
+			}
+
+			if (peaks.length < this.minPeaks) {
+				throw new Error('Could not find enough samples for a reliable detection');
+				return;
+			}
+
+			//# Count intervals between peaks
+			var intervals = this.identifyIntervals(peaks);
+			var tempos = this.groupByTempo(intervals);
+
+			tempos.sort(function (a, b) {
+				return b.count - a.count;
+			});
+			return __guardFunc__(this.onProcessEnd, function (f) {
+				return f(tempos[0].tempo);
+			});
+		}
+	}, {
+		key: 'getPeaksAtThreshold',
+		value: function getPeaksAtThreshold(data, threshold) {
+			var result = [];
+
+			var i = 0;
+			while (i < data.length) {
+				if (data[i] > threshold) {
+					result[result.length++] = i;
+					i += 10000;
 				}
-				if (!a || a.nodeType) { //if it's not an array, wrap it in one.
-					return [a];
-				}
-				var b = [],
-					l = a.length,
-					i;
-				for (i = 0; i !== l; b.push(a[i++]));
-				return b;
-			},
-			ThrowPropsPlugin,
 
-			_renderQueueTick = function() {
-				var i = _renderQueue.length;
-				while (--i > -1) {
-					_renderQueue[i]();
-				}
-			},
-			_addToRenderQueue = function(func) {
-				_renderQueue.push(func);
-				if (_renderQueue.length === 1) {
-					TweenLite.ticker.addEventListener("tick", _renderQueueTick, this, false, 1);
-				}
-			},
-			_removeFromRenderQueue = function(func) {
-				var i = _renderQueue.length;
-				while (--i > -1) {
-					if (_renderQueue[i] === func) {
-						_renderQueue.splice(i, 1);
+				i++;
+			}
+
+			return result;
+		}
+	}, {
+		key: 'identifyIntervals',
+		value: function identifyIntervals(peaks) {
+			var counts = [];
+
+			peaks.forEach(function (peak, index) {
+				var i = 0;
+				return function () {
+					var result1 = [];
+
+					var _loop = function _loop() {
+						var interval = peaks[index + i] - peak;
+
+						var result = counts.some(function (counts) {
+							if (counts.interval === interval) {
+								return counts.count++;
+							}
+						});
+
+						if (!isNaN(interval) && interval !== 0 && !result) {
+							counts[counts.length++] = { interval: interval, count: 1 };
+						}
+
+						result1.push(i++);
+					};
+
+					while (i < 10) {
+						_loop();
 					}
-				}
-				TweenLite.to(_renderQueueTimeout, 0, {overwrite:"all", delay:15, onComplete:_renderQueueTimeout}); //remove the "tick" listener only after the render queue is empty for 15 seconds (to improve performance). Adding/removing it constantly for every click/touch wouldn't deliver optimal speed, and we also don't want the ticker to keep calling the render method when things are idle for long periods of time (we want to improve battery life on mobile devices).
-			},
-			_renderQueueTimeout = function() {
-				if (!_renderQueue.length) {
-					TweenLite.ticker.removeEventListener("tick", _renderQueueTick);
-				}
-			},
+					return result1;
+				}();
+			});
 
-			_extend = function(obj, defaults) {
-				var p;
-				for (p in defaults) {
-					if (obj[p] === undefined) {
-						obj[p] = defaults[p];
-					}
-				}
-				return obj;
-			},
-			_getDocScrollTop = function() {
-				return (window.pageYOffset != null) ? window.pageYOffset : (_doc.scrollTop != null) ? _doc.scrollTop : _docElement.scrollTop || _doc.body.scrollTop || 0;
-			},
-			_getDocScrollLeft = function() {
-				return (window.pageXOffset != null) ? window.pageXOffset : (_doc.scrollLeft != null) ? _doc.scrollLeft : _docElement.scrollLeft || _doc.body.scrollLeft || 0;
-			},
-			_addScrollListener = function(e, callback) {
-				_addListener(e, "scroll", callback);
-				if (!_isRoot(e.parentNode)) {
-					_addScrollListener(e.parentNode, callback);
-				}
-			},
-			_removeScrollListener = function(e, callback) {
-				_removeListener(e, "scroll", callback);
-				if (!_isRoot(e.parentNode)) {
-					_removeScrollListener(e.parentNode, callback);
-				}
-			},
-			_isRoot = function (e) {
-				return !!(!e || e === _docElement || e === _doc || e === _doc.body || e === window || !e.nodeType || !e.parentNode);
-			},
-			_getMaxScroll = function(element, axis) {
-				var dim = (axis === "x") ? "Width" : "Height",
-					scroll = "scroll" + dim,
-					client = "client" + dim,
-					body = _doc.body;
-				return Math.max(0, _isRoot(element) ? Math.max(_docElement[scroll], body[scroll]) - (window["inner" + dim] || _docElement[client] || body[client]) : element[scroll] - element[client]);
-			},
-			_recordMaxScrolls = function(e) { //records _gsMaxScrollX and _gsMaxScrollY properties for the element and all ancestors up the chain so that we can cap it, otherwise dragging beyond the edges with autoScroll on can endlessly scroll.
-				var isRoot = _isRoot(e),
-					x = _getMaxScroll(e, "x"),
-					y = _getMaxScroll(e, "y");
-				if (isRoot) {
-					e = _windowProxy;
-				} else {
-					_recordMaxScrolls(e.parentNode);
-				}
-				e._gsMaxScrollX = x;
-				e._gsMaxScrollY = y;
-				e._gsScrollX = e.scrollLeft || 0;
-				e._gsScrollY = e.scrollTop || 0;
-			},
+			return counts;
+		}
+	}, {
+		key: 'groupByTempo',
+		value: function groupByTempo(counts) {
+			var results = [];
 
-			//just used for IE8 and earlier to normalize events and populate pageX/pageY
-			_populateIEEvent = function(e, preventDefault) {
-				e = e || window.event;
-				_tempEvent.pageX = e.clientX + _doc.body.scrollLeft + _docElement.scrollLeft;
-				_tempEvent.pageY = e.clientY + _doc.body.scrollTop + _docElement.scrollTop;
-				if (preventDefault) {
-					e.returnValue = false;
-				}
-				return _tempEvent;
-			},
-
-			//grabs the first element it finds (and we include the window as an element), so if it's selector text, it'll feed that value to TweenLite.selector, if it's a jQuery object or some other selector engine's result, it'll grab the first one, and same for an array. If the value doesn't contain a DOM element, it'll just return null.
-			_unwrapElement = function(value) {
-				if (!value) {
-					return value;
-				}
-				if (typeof(value) === "string") {
-					value = TweenLite.selector(value);
-				}
-				if (value.length && value !== window && value[0] && value[0].style && !value.nodeType) {
-					value = value[0];
-				}
-				return (value === window || (value.nodeType && value.style)) ? value : null;
-			},
-
-			_checkPrefix = function(e, p) {
-				var s = e.style,
-					capped, i, a;
-				if (s[p] === undefined) {
-					a = ["O","Moz","ms","Ms","Webkit"];
-					i = 5;
-					capped = p.charAt(0).toUpperCase() + p.substr(1);
-					while (--i > -1 && s[a[i]+capped] === undefined) { }
-					if (i < 0) {
-						return "";
-					}
-					_prefix = (i === 3) ? "ms" : a[i];
-					p = _prefix + capped;
-				}
-				return p;
-			},
-
-			_setStyle = function(e, p, value) {
-				var s = e.style;
-				if (!s) {
+			counts.forEach(function (count) {
+				if (count.interval === 0) {
 					return;
 				}
-				if (s[p] === undefined) {
-					p = _checkPrefix(e, p);
-				}
-				if (value == null) {
-					if (s.removeProperty) {
-						s.removeProperty(p.replace(/([A-Z])/g, "-$1").toLowerCase());
-					} else { //note: old versions of IE use "removeAttribute()" instead of "removeProperty()"
-						s.removeAttribute(p);
-					}
-				} else if (s[p] !== undefined) {
-					s[p] = value;
-				}
-			},
 
-			_getComputedStyle = _doc.defaultView ? _doc.defaultView.getComputedStyle : _emptyFunc,
-			_horizExp = /(?:Left|Right|Width)/i,
-			_suffixExp = /(?:\d|\-|\+|=|#|\.)*/g,
-			_convertToPixels = function(t, p, v, sfx, recurse) {
-				if (sfx === "px" || !sfx) { return v; }
-				if (sfx === "auto" || !v) { return 0; }
-				var horiz = _horizExp.test(p),
-					node = t,
-					style = _tempDiv.style,
-					neg = (v < 0),
-					pix;
-				if (neg) {
-					v = -v;
+				//# Convert an interval to tempo
+				var theoreticalTempo = 60 / (count.interval / 44100);
+
+				//# Adjust the tempo to fit within the 90-180 BPM range
+				while (theoreticalTempo < 90) {
+					theoreticalTempo *= 2;
 				}
-				if (sfx === "%" && p.indexOf("border") !== -1) {
-					pix = (v / 100) * (horiz ? t.clientWidth : t.clientHeight);
+				while (theoreticalTempo > 180) {
+					theoreticalTempo /= 2;
+				}
+
+				//# Round to legible integer
+				theoreticalTempo = Math.round(theoreticalTempo);
+
+				var foundTempo = results.some(function (result) {
+					if (result.tempo === theoreticalTempo) {
+						return result.count += count.count;
+					}
+				});
+
+				if (!foundTempo) {
+					return results[results.length++] = {
+						tempo: theoreticalTempo,
+						count: count.count
+					};
+				}
+			});
+
+			return results;
+		}
+	}]);
+
+	return BPMProcessor;
+}();
+
+exports.default = BPMProcessor;
+;
+
+function __guardFunc__(func, transform) {
+	return typeof func === 'function' ? transform(func) : undefined;
+}
+
+},{}],3:[function(require,module,exports){
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+	value: true
+});
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+var _datGui = require('dat-gui');
+
+var _datGui2 = _interopRequireDefault(_datGui);
+
+var _Outcome = require('./gui/Outcome');
+
+var _Outcome2 = _interopRequireDefault(_Outcome);
+
+var _Spectrum = require('./gui/Spectrum');
+
+var _Spectrum2 = _interopRequireDefault(_Spectrum);
+
+var _Track = require('./gui/Track');
+
+var _Track2 = _interopRequireDefault(_Track);
+
+var _colors = require('./gui/colors');
+
+var _colors2 = _interopRequireDefault(_colors);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+var GUI = function () {
+	function GUI(beats) {
+		_classCallCheck(this, GUI);
+
+		this.start = this.start.bind(this);
+		this.pause = this.pause.bind(this);
+		this.changeOutput = this.changeOutput.bind(this);
+		this.repeatPhase = this.repeatPhase.bind(this);
+		this.updateKeys = this.updateKeys.bind(this);
+		this.resize = this.resize.bind(this);
+		this.beats = beats;
+		this.beats.media.controls = true;
+		this.beats.media.autoplay = false;
+
+		//# Initialize dat.GUI
+		this.gui = new _datGui2.default.GUI();
+
+		//# Override dat.GUI style
+		document.head.appendChild(document.querySelector('.main-style'));
+
+		//# Initial output (which analyser will be shown)
+		this.output = this.beats.analyser;
+
+		this.outcome = new _Outcome2.default(this.beats);
+		this.spectrum = new _Spectrum2.default(this.beats, this.changeOutput);
+		this.track = new _Track2.default(this.beats);
+
+		//# Set dat controls
+		this.setControllers();
+
+		addEventListener('resize', this.resize, true);
+		addEventListener('keydown', this.pause, false);
+
+		//# Resize once on start
+		this.resize();
+	}
+
+	_createClass(GUI, [{
+		key: 'start',
+		value: function start() {
+			return document.querySelector('.overlay').classList.add('hide');
+		}
+	}, {
+		key: 'pause',
+		value: function pause(event) {
+			if (event.keyCode === 32) {
+				event.preventDefault();
+
+				var media = this.beats.media;
+
+				if (media.paused) {
+					return media.play();
 				} else {
-					style.cssText = "border:0 solid red;position:" + _getStyle(t, "position", true) + ";line-height:0;";
-					if (sfx === "%" || !node.appendChild) {
-						node = t.parentNode || _doc.body;
-						style[(horiz ? "width" : "height")] = v + sfx;
-					} else {
-						style[(horiz ? "borderLeftWidth" : "borderTopWidth")] = v + sfx;
-					}
-					node.appendChild(_tempDiv);
-					pix = parseFloat(_tempDiv[(horiz ? "offsetWidth" : "offsetHeight")]);
-					node.removeChild(_tempDiv);
-					if (pix === 0 && !recurse) {
-						pix = _convertToPixels(t, p, v, sfx, true);
-					}
+					return media.pause();
 				}
-				return neg ? -pix : pix;
-			},
-			_calculateOffset = function(t, p) { //for figuring out "top" or "left" in px when it's "auto". We need to factor in margin with the offsetLeft/offsetTop
-				if (_getStyle(t, "position", true) !== "absolute") { return 0; }
-				var dim = ((p === "left") ? "Left" : "Top"),
-					v = _getStyle(t, "margin" + dim, true);
-				return t["offset" + dim] - (_convertToPixels(t, p, parseFloat(v), (v + "").replace(_suffixExp, "")) || 0);
-			},
+			} else {
+				return;
+			}
+		}
+	}, {
+		key: 'changeOutput',
+		value: function changeOutput(output) {
+			//# Swicth output
+			this.beats.output.disconnect(0);
+			this.beats.output = output;
+			return this.beats.output.connect(this.beats.destination);
+		}
+	}, {
+		key: 'repeatPhase',
+		value: function repeatPhase(value) {
+			this.loop = null;
 
-			_getStyle = function(element, prop, keepUnits) {
-				var rv = (element._gsTransform || {})[prop],
-					cs;
-				if (rv || rv === 0) {
-					return rv;
-				} else if (element.style[prop]) {
-					rv = element.style[prop];
-				} else if ((cs = _getComputedStyle(element))) {
-					rv = cs.getPropertyValue(prop.replace(/([A-Z])/g, "-$1").toLowerCase());
-					rv = (rv || cs.length) ? rv : cs[prop]; //Opera behaves VERY strangely - length is usually 0 and cs[prop] is the only way to get accurate results EXCEPT when checking for -o-transform which only works with cs.getPropertyValue()!
-				} else if (element.currentStyle) {
-					rv = element.currentStyle[prop];
-				}
-				if (rv === "auto" && (prop === "top" || prop === "left")) {
-					rv = _calculateOffset(element, prop);
-				}
-				return keepUnits ? rv : parseFloat(rv) || 0;
-			},
-
-			_dispatchEvent = function(instance, type, callbackName) {
-				var vars = instance.vars,
-					callback = vars[callbackName],
-					listeners = instance._listeners[type];
-				if (typeof(callback) === "function") {
-					callback.apply(vars[callbackName + "Scope"] || instance, vars[callbackName + "Params"] || [instance.pointerEvent]);
-				}
-				if (listeners) {
-					instance.dispatchEvent(type);
-				}
-			},
-			_getBounds = function(obj, context) { //accepts any of the following: a DOM element, jQuery object, selector text, or an object defining bounds as {top, left, width, height} or {minX, maxX, minY, maxY}. Returns an object with left, top, width, and height properties.
-				var e = _unwrapElement(obj),
-					top, left, offset;
-				if (!e) {
-					if (obj.left !== undefined) {
-						offset = _getOffsetTransformOrigin(context); //the bounds should be relative to the origin
-						return {left: obj.left - offset.x, top: obj.top - offset.y, width: obj.width, height: obj.height};
-					}
-					left = obj.min || obj.minX || obj.minRotation || 0;
-					top = obj.min || obj.minY || 0;
-					return {left:left, top:top, width:(obj.max || obj.maxX || obj.maxRotation || 0) - left, height:(obj.max || obj.maxY || 0) - top};
-				}
-				return _getElementBounds(e, context);
-			},
-
-			_tempDiv = _doc.createElement("div"),
-			_supports3D = (_checkPrefix(_tempDiv, "perspective") !== ""),
-
-
-			// start matrix and point conversion methods...
-			_originProp = _checkPrefix(_tempDiv, "transformOrigin").replace(/^ms/g, "Ms").replace(/([A-Z])/g, "-$1").toLowerCase(),
-			_transformProp = _checkPrefix(_tempDiv, "transform"),
-			_transformCSSProp = _transformProp.replace(/^ms/g, "Ms").replace(/([A-Z])/g, "-$1").toLowerCase(),
-			_point1 = {}, //we reuse _point1 and _point2 objects inside matrix and point conversion methods to conserve memory and minimize garbage collection tasks.
-			_point2 = {},
-			_hasReparentBug, //we'll set this inside the _getOffset2DMatrix() method after the body has loaded.
-			_dummySVGRect = (function() {
-				if (_isOldIE) {
-					return;
-				}
-				var url = "http://www.w3.org/2000/svg",
-					svg = _doc.createElementNS(url, "svg"),
-					e = _doc.createElementNS(url, "rect");
-				e.setAttributeNS(null, "width", "10");
-				e.setAttributeNS(null, "height", "10");
-				svg.appendChild(e);
-				return svg;
-			}()),
-			_SVGElement = window.SVGElement,
-			_isSVG = function(e) {
-				return !!(_SVGElement && typeof(e.getBBox) === "function" && e.getCTM && (!e.parentNode || (e.parentNode.getBBox && e.parentNode.getCTM)));
-			},
-			_svgAttributes = ["class","viewBox","width","height","xml:space"],
-			_getSVGOffsets = function(e) { //SVG elements don't always report offsetTop/offsetLeft/offsetParent at all (I'm looking at you, Firefox 29), so we have to do some work to manufacture those values. You can pass any SVG element and it'll spit back an object with offsetTop, offsetLeft, offsetParent, scaleX, and scaleY properties. We need the scaleX and scaleY to handle the way SVG can resize itself based on the container.
-				if (!e.getBoundingClientRect || !e.parentNode) {
-					return {offsetTop:0, offsetLeft:0, scaleX:1, scaleY:1, offsetParent:_docElement};
-				}
-				if (e._gsSVGData && e._gsSVGData.lastUpdate === TweenLite.ticker.frame) {
-					return e._gsSVGData;
-				}
-				var curElement = e,
-					prevCSS = e.style.cssText,
-					data = e._gsSVGData = e._gsSVGData || {},
-					eRect, parentRect, offsetParent, rRect, i, a;
-				if ((e.nodeName + "").toLowerCase() !== "svg" && e.getBBox) { //if it's a nested/child SVG element, we must find the parent SVG canvas and measure the offset from there.
-					curElement = e.parentNode;
-					eRect = e.getBBox();
-					while (curElement && (curElement.nodeName + "").toLowerCase() !== "svg") {
-						curElement = curElement.parentNode;
-					}
-					data = _getSVGOffsets(curElement);
-					return {offsetTop:eRect.y * data.scaleY, offsetLeft:eRect.x * data.scaleX, scaleX:data.scaleX, scaleY:data.scaleY, offsetParent:curElement || _docElement};
-				}
-				while (!curElement.offsetParent && curElement.parentNode) {
-					curElement = curElement.parentNode;
-				}
-				e.parentNode.insertBefore(_dummySVGRect, e); //Firefox measures things based NOT on the <svg> itself, but on the bounds of the child elements, so we add a dummy SVG object temporarily in the original one's spot which has a 10x10 <rect> in the upper left corner to make sure we're getting accurate results.
-				e.parentNode.removeChild(e);
-				_dummySVGRect.style.cssText = prevCSS;
-				_dummySVGRect.style[_transformProp] = "none";
-				i = _svgAttributes.length;
-				while (--i > -1) {
-					a = e.getAttribute(_svgAttributes[i]);
-					if (a) {
-						_dummySVGRect.setAttribute(_svgAttributes[i], a);
-					} else {
-						_dummySVGRect.removeAttribute(_svgAttributes[i]);
-					}
-				}
-				eRect = _dummySVGRect.getBoundingClientRect();
-				rRect = _dummySVGRect.firstChild.getBoundingClientRect();
-				offsetParent = curElement.offsetParent;
-				if (offsetParent) {
-					if (offsetParent === _doc.body && _docElement) {
-						offsetParent = _docElement; //to avoid problems with margins/padding on the <body>
-					}
-					parentRect = offsetParent.getBoundingClientRect();
+			var i = this.phasesNames.length;
+			while (i--) {
+				//# Get the index of the phase
+				if (value !== this.phasesNames[i] || this.phasesNames[i] === 'none') {
+					continue;
 				} else {
-					parentRect = {top:-_getDocScrollTop(), left:-_getDocScrollLeft()};
+					var index = i - 1;
 				}
-				_dummySVGRect.parentNode.insertBefore(e, _dummySVGRect);
-				e.parentNode.removeChild(_dummySVGRect);
-				data.scaleX = rRect.width / 10;
-				data.scaleY = rRect.height / 10;
-				data.offsetLeft = eRect.left - parentRect.left;
-				data.offsetTop = eRect.top - parentRect.top;
-				data.offsetParent = curElement.offsetParent || _docElement;
-				data.lastUpdate = TweenLite.ticker.frame;
-				return data;
-			},
-			_getOffsetTransformOrigin = function(e, decoratee) {
-				decoratee = decoratee || {};
-				if (!e || e === _docElement || !e.parentNode) {
-					return {x:0, y:0};
-				}
-				var cs = _getComputedStyle(e),
-					v = (_originProp && cs) ? cs.getPropertyValue(_originProp) : "50% 50%",
-					a = v.split(" "),
-					x = (v.indexOf("left") !== -1) ? "0%" : (v.indexOf("right") !== -1) ? "100%" : a[0],
-					y = (v.indexOf("top") !== -1) ? "0%" : (v.indexOf("bottom") !== -1) ? "100%" : a[1];
-				if (y === "center" || y == null) {
-					y = "50%";
-				}
-				if (x === "center" || isNaN(parseFloat(x))) { //remember, the user could flip-flop the values and say "bottom center" or "center bottom", etc. "center" is ambiguous because it could be used to describe horizontal or vertical, hence the isNaN(). If there's an "=" sign in the value, it's relative.
-					x = "50%";
-				}
-				if (e.getBBox && _isSVG(e)) { //SVG elements must be handled in a special way because their origins are calculated from the parent SVG canvas origin
-					if (!e._gsTransform) {
-						TweenLite.set(e, {x:"+=0", overwrite:false}); //forces creation of the _gsTransform where we store all the transform components including xOrigin and yOrigin for SVG elements, as of GSAP 1.15.0 which also takes care of calculating the origin from the upper left corner of the SVG canvas.
-						if (e._gsTransform.xOrigin === undefined) {
-							console.log("Draggable requires at least GSAP 1.16.1");
-						}
-					}
-					v = e.getBBox();
-					a = _getSVGOffsets(e);
-					decoratee.x = (e._gsTransform.xOrigin - v.x) * a.scaleX;
-					decoratee.y = (e._gsTransform.yOrigin - v.y) * a.scaleY;
-				} else {
-					decoratee.x = ((x.indexOf("%") !== -1) ? e.offsetWidth * parseFloat(x) / 100 : parseFloat(x));
-					decoratee.y = ((y.indexOf("%") !== -1) ? e.offsetHeight * parseFloat(y) / 100 : parseFloat(y));
-				}
-				return decoratee;
-			},
-			_getOffset2DMatrix = function(e, offsetOrigin, parentOffsetOrigin) {
-				var cs, m, parent, offsetParent, isRoot, offsets;
-				if (e === window || !e || !e.parentNode) {
-					return [1,0,0,1,0,0];
-				}
-				cs = _getComputedStyle(e);
-				m = cs ? cs.getPropertyValue(_transformCSSProp) : e.currentStyle ? e.currentStyle[_transformProp] : "1,0,0,1,0,0";
-				m = (m + "").match(/(?:\-|\b)[\d\-\.e]+\b/g) || [1,0,0,1,0,0];
-				if (m.length > 6) {
-					m = [m[0], m[1], m[4], m[5], m[12], m[13]];
-				}
-				if (offsetOrigin) {
-					parent = e.parentNode;
-					offsets = ((e.getBBox && _isSVG(e)) || (e.offsetLeft === undefined && (e.nodeName + "").toLowerCase() === "svg")) ? _getSVGOffsets(e) : e;
-					offsetParent = offsets.offsetParent;
-					isRoot = (parent === _docElement || parent === _doc.body);
+			}
 
-					//some browsers (like Chrome 31) have a bug that causes the offsetParent not to report correctly when a transform is applied to an element's parent, so the offsetTop and offsetLeft are measured from the parent instead of whatever the offsetParent reports as. For example, put an absolutely-positioned child div inside a position:static parent, then check the child's offsetTop before and after you apply a transform, like rotate(1deg). You'll see that it changes, but the offsetParent doesn't. So we must sense this condition here (and we can only do it after the body has loaded, as browsers don't accurately report offsets otherwise) and set a variable that we can easily reference later.
-					if (_hasReparentBug === undefined && _doc.body && _transformProp) {
-						_hasReparentBug = (function() {
-							var parent = _doc.createElement("div"),
-								child = _doc.createElement("div"),
-								oldOffsetParent, value;
-							child.style.position = "absolute";
-							_doc.body.appendChild(parent);
-							parent.appendChild(child);
-							oldOffsetParent = child.offsetParent;
-							parent.style[_transformProp] = "rotate(1deg)";
-							value = (child.offsetParent === oldOffsetParent);
-							_doc.body.removeChild(parent);
-							return value;
-						}());
-					}
-					m[4] = Number(m[4]) + offsetOrigin.x + (offsets.offsetLeft || 0) - parentOffsetOrigin.x - (isRoot ? 0 : parent.scrollLeft) + (offsetParent ? parseInt(_getStyle(offsetParent, "borderLeftWidth"), 10) || 0 : 0);
-					m[5] = Number(m[5]) + offsetOrigin.y + (offsets.offsetTop || 0) - parentOffsetOrigin.y - (isRoot ? 0 : parent.scrollTop) + (offsetParent ? parseInt(_getStyle(offsetParent, "borderTopWidth"), 10) || 0 : 0);
-					if (parent && parent.offsetParent === offsetParent && (!_hasReparentBug || _getOffset2DMatrix(parent).join("") === "100100")) {
-						m[4] -= parent.offsetLeft || 0;
-						m[5] -= parent.offsetTop || 0;
-					}
-					if (parent && _getStyle(e, "position", true) === "fixed") { //fixed position elements should factor in the scroll position of the document.
-						m[4] += _getDocScrollLeft();
-						m[5] += _getDocScrollTop();
-					}
-				}
-				return m;
-			},
-			_getConcatenatedMatrix = function(e, invert) {
-				if (!e || e === window || !e.parentNode) {
-					return [1,0,0,1,0,0];
-				}
-				//note: we keep reusing _point1 and _point2 in order to minimize memory usage and garbage collection chores.
-				var originOffset = _getOffsetTransformOrigin(e, _point1),
-					parentOriginOffset = _getOffsetTransformOrigin(e.parentNode, _point2),
-					m = _getOffset2DMatrix(e, originOffset, parentOriginOffset),
-					a, b, c, d, tx, ty, m2, determinant;
-				while ((e = e.parentNode) && e.parentNode && e !== _docElement) {
-					originOffset = parentOriginOffset;
-					parentOriginOffset = _getOffsetTransformOrigin(e.parentNode, (originOffset === _point1) ? _point2 : _point1);
-					m2 = _getOffset2DMatrix(e, originOffset, parentOriginOffset);
-					a = m[0];
-					b = m[1];
-					c = m[2];
-					d = m[3];
-					tx = m[4];
-					ty = m[5];
-					m[0] = a * m2[0] + b * m2[2];
-					m[1] = a * m2[1] + b * m2[3];
-					m[2] = c * m2[0] + d * m2[2];
-					m[3] = c * m2[1] + d * m2[3];
-					m[4] = tx * m2[0] + ty * m2[2] + m2[4];
-					m[5] = tx * m2[1] + ty * m2[3] + m2[5];
-				}
-				if (invert) {
-					a = m[0];
-					b = m[1];
-					c = m[2];
-					d = m[3];
-					tx = m[4];
-					ty = m[5];
-					determinant = (a * d - b * c);
-					m[0] = d / determinant;
-					m[1] = -b / determinant;
-					m[2] = -c / determinant;
-					m[3] = a / determinant;
-					m[4] = (c * ty - d * tx) / determinant;
-					m[5] = -(a * ty - b * tx) / determinant;
-				}
-				return m;
-			},
-			_localToGlobal = function(e, p, decoratee) {
-				var m = _getConcatenatedMatrix(e),
-					x = p.x,
-					y = p.y;
-				decoratee = (decoratee === true) ? p : decoratee || {};
-				decoratee.x = x * m[0] + y * m[2] + m[4];
-				decoratee.y = x * m[1] + y * m[3] + m[5];
-				return decoratee;
-			},
-			_localizePoint = function(p, localToGlobal, globalToLocal) {
-				var x = p.x * localToGlobal[0] + p.y * localToGlobal[2] + localToGlobal[4],
-					y = p.x * localToGlobal[1] + p.y * localToGlobal[3] + localToGlobal[5];
-				p.x = x * globalToLocal[0] + y * globalToLocal[2] + globalToLocal[4];
-				p.y = x * globalToLocal[1] + y * globalToLocal[3] + globalToLocal[5];
-				return p;
-			},
-			_getElementBounds = function(e, context) {
-				var origin, left, right, top, bottom, mLocalToGlobal, mGlobalToLocal, p1, p2, p3, p4;
-				if (e === window) {
-					top = _getDocScrollTop();
-					left = _getDocScrollLeft();
-					right = left + (_docElement.clientWidth || e.innerWidth || _doc.body.clientWidth || 0);
+			if (index == null) {
+				return;
+			}
 
-					bottom = top + (((e.innerHeight || 0) - 20 < _docElement.clientHeight) ? _docElement.clientHeight : e.innerHeight || _doc.body.clientHeight || 0); //some browsers (like Firefox) ignore absolutely positioned elements, and collapse the height of the documentElement, so it could be 8px, for example, if you have just an absolutely positioned div. In that case, we use the innerHeight to resolve this. Also note that IE8 doesn't support window.innerHeight.
-				} else {
-					origin = _getOffsetTransformOrigin(e);
-					left = -origin.x;
-					right = left + e.offsetWidth;
-					top = -origin.y;
-					bottom = top + e.offsetHeight;
-				}
-				if (e === context) {
-					return {left:left, top:top, width: right - left, height: bottom - top};
-				}
-				mLocalToGlobal = _getConcatenatedMatrix(e);
-				mGlobalToLocal = _getConcatenatedMatrix(context, true);
-				p1 = _localizePoint({x:left, y:top}, mLocalToGlobal, mGlobalToLocal);
-				p2 = _localizePoint({x:right, y:top}, mLocalToGlobal, mGlobalToLocal);
-				p3 = _localizePoint({x:right, y:bottom}, mLocalToGlobal, mGlobalToLocal);
-				p4 = _localizePoint({x:left, y:bottom}, mLocalToGlobal, mGlobalToLocal);
-				left = Math.min(p1.x, p2.x, p3.x, p4.x);
-				top = Math.min(p1.y, p2.y, p3.y, p4.y);
-				return {left:left, top:top, width:Math.max(p1.x, p2.x, p3.x, p4.x) - left, height:Math.max(p1.y, p2.y, p3.y, p4.y) - top};
-			},
-			// end matrix and point conversion methods
+			//# Store loop parameters
+			this.loop = {
+				index: index,
+				start: this.beats.phases[index],
+				end: this.beats.phases[index + 1] || this.beats.duration
+			};
 
+			//# Update media current time
+			this.beats.media.currentTime = this.loop.start.time;
+			this.beats.position = this.loop.index;
 
+			return this.update(true);
+		}
+	}, {
+		key: 'updateKeys',
+		value: function updateKeys() {
+			var _this = this;
 
-			_isArrayLike = function(e) {
-				return (e.length && e[0] && ((e[0].nodeType && e[0].style && !e.nodeType) || (e[0].length && e[0][0]))) ? true : false; //could be an array of jQuery objects too, so accommodate that.
-			},
-
-			_flattenArray = function(a) {
-				var result = [],
-					l = a.length,
-					i, e, j;
-				for (i = 0; i < l; i++) {
-					e = a[i];
-					if (_isArrayLike(e)) {
-						j = e.length;
-						for (j = 0; j < e.length; j++) {
-							result.push(e[j]);
-						}
-					} else {
-						result.push(e);
-					}
+			var i = this.spectrum.keys.length;
+			return function () {
+				var result = [];
+				while (i--) {
+					result.push(_this.spectrum.keys[i].update());
 				}
 				return result;
-			},
-
-			_isTouchDevice = (("ontouchstart" in _docElement) && ("orientation" in window)),
-			_touchEventLookup = (function(types) { //we create an object that makes it easy to translate touch event types into their "pointer" counterparts if we're in a browser that uses those instead. Like IE10 uses "MSPointerDown" instead of "touchstart", for example.
-				var standard = types.split(","),
-					converted = ((_tempDiv.onpointerdown !== undefined) ? "pointerdown,pointermove,pointerup,pointercancel" : (_tempDiv.onmspointerdown !== undefined) ? "MSPointerDown,MSPointerMove,MSPointerUp,MSPointerCancel" : types).split(","),
-					obj = {},
-					i = 8;
-				while (--i > -1) {
-					obj[standard[i]] = converted[i];
-					obj[converted[i]] = standard[i];
-				}
-				return obj;
-			}("touchstart,touchmove,touchend,touchcancel")),
-
-			_addListener = function(element, type, func, capture) {
-				if (element.addEventListener) {
-					element.addEventListener(_touchEventLookup[type] || type, func, capture);
-				} else if (element.attachEvent) {
-					element.attachEvent("on" + type, func);
-				}
-			},
-
-			_removeListener = function(element, type, func) {
-				if (element.removeEventListener) {
-					element.removeEventListener(_touchEventLookup[type] || type, func);
-				} else if (element.detachEvent) {
-					element.detachEvent("on" + type, func);
-				}
-			},
-
-			_onMultiTouchDocumentEnd = function(e) {
-				_isMultiTouching = (e.touches && _dragCount < e.touches.length);
-				_removeListener(e.target, "touchend", _onMultiTouchDocumentEnd);
-			},
-
-			_onMultiTouchDocument = function(e) {
-				_isMultiTouching = (e.touches && _dragCount < e.touches.length);
-				_addListener(e.target, "touchend", _onMultiTouchDocumentEnd);
-			},
-
-			_parseThrowProps = function(draggable, snap, max, min, factor, forceZeroVelocity) {
-				var vars = {},
-					a, i, l;
-				if (snap) {
-					if (factor !== 1 && snap instanceof Array) { //some data must be altered to make sense, like if the user passes in an array of rotational values in degrees, we must convert it to radians. Or for scrollLeft and scrollTop, we invert the values.
-						vars.end = a = [];
-						l = snap.length;
-						for (i = 0; i < l; i++) {
-							a[i] = snap[i] * factor;
-						}
-						max += 1.1; //allow 1.1 pixels of wiggle room when snapping in order to work around some browser inconsistencies in the way bounds are reported which can make them roughly a pixel off. For example, if "snap:[-$('#menu').width(), 0]" was defined and #menu had a wrapper that was used as the bounds, some browsers would be one pixel off, making the minimum -752 for example when snap was [-753,0], thus instead of snapping to -753, it would snap to 0 since -753 was below the minimum.
-						min -= 1.1;
-					} else if (typeof(snap) === "function") {
-						vars.end = function(value) {
-							return snap.call(draggable, value) * factor; //we need to ensure that we can scope the function call to the Draggable instance itself so that users can access important values like maxX, minX, maxY, minY, x, and y from within that function.
-						};
-					} else {
-						vars.end = snap;
-					}
-				}
-				if (max || max === 0) {
-					vars.max = max;
-				}
-				if (min || min === 0) {
-					vars.min = min;
-				}
-				if (forceZeroVelocity) {
-					vars.velocity = 0;
-				}
-				return vars;
-			},
-
-			_isClickable = function(e) { //sometimes it's convenient to mark an element as clickable by adding a data-clickable="true" attribute (in which case we won't preventDefault() the mouse/touch event). This method checks if the element is an <a>, <input>, or <button> or has an onclick or has the data-clickable or contentEditable attribute set to true (or any of its parent elements).
-				var data;
-				return (!e || !e.getAttribute || e.nodeName === "BODY") ? false : ((data = e.getAttribute("data-clickable")) === "true" || (data !== "false" && (e.onclick || _clickableTagExp.test(e.nodeName + "") || e.getAttribute("contentEditable") === "true"))) ? true : _isClickable(e.parentNode);
-			},
-
-			_setSelectable = function(elements, selectable) {
-				var i = elements.length,
-					e;
-				while (--i > -1) {
-					e = elements[i];
-					e.ondragstart = e.onselectstart = selectable ? null : _emptyFunc;
-					_setStyle(e, "userSelect", (selectable ? "text" : "none"));
-				}
-			},
-
-			_addPaddingBR,
-			_addPaddingLeft = (function() { //this function is in charge of analyzing browser behavior related to padding. It sets the _addPaddingBR to true if the browser doesn't normally factor in the bottom or right padding on the element inside the scrolling area, and it sets _addPaddingLeft to true if it's a browser that requires the extra offset (offsetLeft) to be added to the paddingRight (like Opera).
-				var div = _doc.createElement("div"),
-					child = _doc.createElement("div"),
-					childStyle = child.style,
-					parent = _doc.body || _tempDiv,
-					val;
-				childStyle.display = "inline-block";
-				childStyle.position = "relative";
-				div.style.cssText = child.innerHTML = "width:90px; height:40px; padding:10px; overflow:auto; visibility: hidden";
-				div.appendChild(child);
-				parent.appendChild(div);
-				_addPaddingBR = (child.offsetHeight + 18 > div.scrollHeight); //div.scrollHeight should be child.offsetHeight + 20 because of the 10px of padding on each side, but some browsers ignore one side. We allow a 2px margin of error.
-				childStyle.width = "100%";
-				if (!_transformProp) {
-					childStyle.paddingRight = "500px";
-					val = div.scrollLeft = div.scrollWidth - div.clientWidth;
-					childStyle.left = "-90px";
-					val = (val !== div.scrollLeft);
-				}
-				parent.removeChild(div);
-				return val;
-			}()),
-
-
-
-
-			//The ScrollProxy class wraps an element's contents into another div (we call it "content") that we either add padding when necessary or apply a translate3d() transform in order to overscroll (scroll past the boundaries). This allows us to simply set the scrollTop/scrollLeft (or top/left for easier reverse-axis orientation, which is what we do in Draggable) and it'll do all the work for us. For example, if we tried setting scrollTop to -100 on a normal DOM element, it wouldn't work - it'd look the same as setting it to 0, but if we set scrollTop of a ScrollProxy to -100, it'll give the correct appearance by either setting paddingTop of the wrapper to 100 or applying a 100-pixel translateY.
-			ScrollProxy = function(element, vars) {
-				element = _unwrapElement(element);
-				vars = vars || {};
-				var content = _doc.createElement("div"),
-					style = content.style,
-					node = element.firstChild,
-					offsetTop = 0,
-					offsetLeft = 0,
-					prevTop = element.scrollTop,
-					prevLeft = element.scrollLeft,
-					scrollWidth = element.scrollWidth,
-					scrollHeight = element.scrollHeight,
-					extraPadRight = 0,
-					maxLeft = 0,
-					maxTop = 0,
-					elementWidth, elementHeight, contentHeight, nextNode, transformStart, transformEnd;
-
-				if (_supports3D && vars.force3D !== false) {
-					transformStart = "translate3d(";
-					transformEnd = "px,0px)";
-				} else if (_transformProp) {
-					transformStart = "translate(";
-					transformEnd = "px)";
-				}
-
-				this.scrollTop = function(value, force) {
-					if (!arguments.length) {
-						return -this.top();
-					}
-					this.top(-value, force);
-				};
-
-				this.scrollLeft = function(value, force) {
-					if (!arguments.length) {
-						return -this.left();
-					}
-					this.left(-value, force);
-				};
-
-				this.left = function(value, force) {
-					if (!arguments.length) {
-						return -(element.scrollLeft + offsetLeft);
-					}
-					var dif = element.scrollLeft - prevLeft,
-						oldOffset = offsetLeft;
-					if ((dif > 2 || dif < -2) && !force) { //if the user interacts with the scrollbar (or something else scrolls it, like the mouse wheel), we should kill any tweens of the ScrollProxy.
-						prevLeft = element.scrollLeft;
-						TweenLite.killTweensOf(this, true, {left:1, scrollLeft:1});
-						this.left(-prevLeft);
-						if (vars.onKill) {
-							vars.onKill();
-						}
-						return;
-					}
-					value = -value; //invert because scrolling works in the opposite direction
-					if (value < 0) {
-						offsetLeft = (value - 0.5) | 0;
-						value = 0;
-					} else if (value > maxLeft) {
-						offsetLeft = (value - maxLeft) | 0;
-						value = maxLeft;
-					} else {
-						offsetLeft = 0;
-					}
-					if (offsetLeft || oldOffset) {
-						if (transformStart) {
-							if (!this._suspendTransforms) {
-								style[_transformProp] = transformStart + -offsetLeft + "px," + -offsetTop + transformEnd;
-							}
-						} else {
-							style.left = -offsetLeft + "px";
-						}
-						if (_addPaddingLeft && offsetLeft + extraPadRight >= 0) {
-							style.paddingRight = offsetLeft + extraPadRight + "px";
-						}
-					}
-					element.scrollLeft = value | 0;
-					prevLeft = element.scrollLeft; //don't merge this with the line above because some browsers adjsut the scrollLeft after it's set, so in order to be 100% accurate in tracking it, we need to ask the browser to report it.
-				};
-
-				this.top = function(value, force) {
-					if (!arguments.length) {
-						return -(element.scrollTop + offsetTop);
-					}
-					var dif = element.scrollTop - prevTop,
-						oldOffset = offsetTop;
-					if ((dif > 2 || dif < -2) && !force) { //if the user interacts with the scrollbar (or something else scrolls it, like the mouse wheel), we should kill any tweens of the ScrollProxy.
-						prevTop = element.scrollTop;
-						TweenLite.killTweensOf(this, true, {top:1, scrollTop:1});
-						this.top(-prevTop);
-						if (vars.onKill) {
-							vars.onKill();
-						}
-						return;
-					}
-					value = -value; //invert because scrolling works in the opposite direction
-					if (value < 0) {
-						offsetTop = (value - 0.5) | 0;
-						value = 0;
-					} else if (value > maxTop) {
-						offsetTop = (value - maxTop) | 0;
-						value = maxTop;
-					} else {
-						offsetTop = 0;
-					}
-					if (offsetTop || oldOffset) {
-						if (transformStart) {
-							if (!this._suspendTransforms) {
-								style[_transformProp] = transformStart + -offsetLeft + "px," + -offsetTop + transformEnd;
-							}
-						} else {
-							style.top = -offsetTop + "px";
-						}
-					}
-					element.scrollTop = value | 0;
-					prevTop = element.scrollTop;
-				};
-
-				this.maxScrollTop = function() {
-					return maxTop;
-				};
-
-				this.maxScrollLeft = function() {
-					return maxLeft;
-				};
-
-				this.disable = function() {
-					node = content.firstChild;
-					while (node) {
-						nextNode = node.nextSibling;
-						element.appendChild(node);
-						node = nextNode;
-					}
-					if (element === content.parentNode) { //in case disable() is called when it's already disabled.
-						element.removeChild(content);
-					}
-				};
-
-				this.enable = function() {
-					node = element.firstChild;
-					if (node === content) {
-						return;
-					}
-					while (node) {
-						nextNode = node.nextSibling;
-						content.appendChild(node);
-						node = nextNode;
-					}
-					element.appendChild(content);
-					this.calibrate();
-				};
-
-				this.calibrate = function(force) {
-					var widthMatches = (element.clientWidth === elementWidth),
-						x, y;
-					prevTop = element.scrollTop;
-					prevLeft = element.scrollLeft;
-					if (widthMatches && element.clientHeight === elementHeight && content.offsetHeight === contentHeight && scrollWidth === element.scrollWidth && scrollHeight === element.scrollHeight && !force) {
-						return; //no need to recalculate things if the width and height haven't changed.
-					}
-					if (offsetTop || offsetLeft) {
-						x = this.left();
-						y = this.top();
-						this.left(-element.scrollLeft);
-						this.top(-element.scrollTop);
-					}
-					//first, we need to remove any width constraints to see how the content naturally flows so that we can see if it's wider than the containing element. If so, we've got to record the amount of overage so that we can apply that as padding in order for browsers to correctly handle things. Then we switch back to a width of 100% (without that, some browsers don't flow the content correctly)
-					if (!widthMatches || force) {
-						style.display = "block";
-						style.width = "auto";
-						style.paddingRight = "0px";
-						extraPadRight = Math.max(0, element.scrollWidth - element.clientWidth);
-						//if the content is wider than the container, we need to add the paddingLeft and paddingRight in order for things to behave correctly.
-						if (extraPadRight) {
-							extraPadRight += _getStyle(element, "paddingLeft") + (_addPaddingBR ? _getStyle(element, "paddingRight") : 0);
-						}
-					}
-					style.display = "inline-block";
-					style.position = "relative";
-					style.overflow = "visible";
-					style.verticalAlign = "top";
-					style.width = "100%";
-					style.paddingRight = extraPadRight + "px";
-					//some browsers neglect to factor in the bottom padding when calculating the scrollHeight, so we need to add that padding to the content when that happens. Allow a 2px margin for error
-					if (_addPaddingBR) {
-						style.paddingBottom = _getStyle(element, "paddingBottom", true);
-					}
-					if (_isOldIE) {
-						style.zoom = "1";
-					}
-					elementWidth = element.clientWidth;
-					elementHeight = element.clientHeight;
-					scrollWidth = element.scrollWidth;
-					scrollHeight = element.scrollHeight;
-					maxLeft = element.scrollWidth - elementWidth;
-					maxTop = element.scrollHeight - elementHeight;
-					contentHeight = content.offsetHeight;
-					style.display = "block";
-					if (x || y) {
-						this.left(x);
-						this.top(y);
-					}
-				};
-
-				this.content = content;
-				this.element = element;
-				this._suspendTransforms = false;
-				this.enable();
-			},
-
-
-
-
-
-			Draggable = function(target, vars) {
-				EventDispatcher.call(this, target);
-				target = _unwrapElement(target); //in case the target is a selector object or selector text
-				if (!ThrowPropsPlugin) {
-					ThrowPropsPlugin = _globals.com.greensock.plugins.ThrowPropsPlugin;
-				}
-				this.vars = vars = vars || {};
-				this.target = target;
-				this.x = this.y = this.rotation = 0;
-				this.dragResistance = parseFloat(vars.dragResistance) || 0;
-				this.edgeResistance = isNaN(vars.edgeResistance) ? 1 : parseFloat(vars.edgeResistance) || 0;
-				this.lockAxis = vars.lockAxis;
-				this.autoScroll = vars.autoScroll || 0;
-				this.lockedAxis = null;
-				this.allowEventDefault = !!vars.allowEventDefault;
-				var type = (vars.type || (_isOldIE ? "top,left" : "x,y")).toLowerCase(),
-					xyMode = (type.indexOf("x") !== -1 || type.indexOf("y") !== -1),
-					rotationMode = (type.indexOf("rotation") !== -1),
-					xProp = rotationMode ? "rotation" : xyMode ? "x" : "left",
-					yProp = xyMode ? "y" : "top",
-					allowX = (type.indexOf("x") !== -1 || type.indexOf("left") !== -1 || type === "scroll"),
-					allowY = (type.indexOf("y") !== -1 || type.indexOf("top") !== -1 || type === "scroll"),
-					minimumMovement = vars.minimumMovement || 2,
-					self = this,
-					triggers = _slice(vars.trigger || vars.handle || target),
-					killProps = {},
-					dragEndTime = 0,
-					checkAutoScrollBounds = false,
-					isClickable = vars.clickableTest || _isClickable,
-					enabled, scrollProxy, startPointerX, startPointerY, startElementX, startElementY, hasBounds, hasDragCallback, maxX, minX, maxY, minY, tempVars, cssVars, touch, touchID, rotationOrigin, dirty, old, snapX, snapY, isClicking, touchEventTarget, matrix, interrupted, clickTime, startScrollTop, startScrollLeft, applyObj, allowNativeTouchScrolling, touchDragAxis,
-
-					//this method gets called on every tick of TweenLite.ticker which allows us to synchronize the renders to the core engine (which is typically synchronized with the display refresh via requestAnimationFrame). This is an optimization - it's better than applying the values inside the "mousemove" or "touchmove" event handler which may get called many times inbetween refreshes.
-					render = function(suppressEvents) {
-						if (self.autoScroll && self.isDragging && (dirty || checkAutoScrollBounds)) {
-							var e = target,
-								autoScrollFactor = self.autoScroll * 15, //multiplying by 15 just gives us a better "feel" speed-wise.
-								parent, isRoot, rect, pointerX, pointerY, changeX, changeY, gap;
-							checkAutoScrollBounds = false;
-							_windowProxy.scrollTop = ((window.pageYOffset != null) ? window.pageYOffset : (_docElement.scrollTop != null) ? _docElement.scrollTop : _doc.body.scrollTop);
-							_windowProxy.scrollLeft = ((window.pageXOffset != null) ? window.pageXOffset : (_docElement.scrollLeft != null) ? _docElement.scrollLeft : _doc.body.scrollLeft);
-							pointerX = self.pointerX - _windowProxy.scrollLeft;
-							pointerY = self.pointerY - _windowProxy.scrollTop;
-							while (e && !isRoot) { //walk up the chain and sense wherever the pointer is within 40px of an edge that's scrollable.
-								isRoot = _isRoot(e.parentNode);
-								parent = isRoot ? _windowProxy : e.parentNode;
-								rect = isRoot ? {bottom:Math.max(_docElement.clientHeight, window.innerHeight || 0), right: Math.max(_docElement.clientWidth, window.innerWidth || 0), left:0, top:0} : parent.getBoundingClientRect();
-								changeX = changeY = 0;
-								if (allowY) {
-									if (pointerY > rect.bottom - 40 && (gap = parent._gsMaxScrollY - parent.scrollTop)) {
-										checkAutoScrollBounds = true;
-										changeY = Math.min(gap, (autoScrollFactor * (1 - Math.max(0, (rect.bottom - pointerY)) / 40)) | 0);
-									} else if (pointerY < rect.top + 40 && parent.scrollTop) {
-										checkAutoScrollBounds = true;
-										changeY = -Math.min(parent.scrollTop, (autoScrollFactor * (1 - Math.max(0, (pointerY - rect.top)) / 40)) | 0);
-									}
-									if (changeY) {
-										parent.scrollTop += changeY;
-									}
-								}
-
-								if (allowX) {
-									if (pointerX > rect.right - 40 && (gap = parent._gsMaxScrollX - parent.scrollLeft)) {
-										checkAutoScrollBounds = true;
-										changeX = Math.min(gap, (autoScrollFactor * (1 - Math.max(0, (rect.right - pointerX)) / 40)) | 0);
-									} else if (pointerX < rect.left + 40 && parent.scrollLeft) {
-										checkAutoScrollBounds = true;
-										changeX = -Math.min(parent.scrollLeft, (autoScrollFactor * (1 - Math.max(0, (pointerX - rect.left)) / 40)) | 0);
-									}
-									if (changeX) {
-										parent.scrollLeft += changeX;
-									}
-								}
-
-								if (isRoot && (changeX || changeY)) {
-									window.scrollTo(parent.scrollLeft, parent.scrollTop);
-									setPointerPosition(self.pointerX + changeX, self.pointerY + changeY);
-								}
-								e = parent;
-							}
-						}
-						if (dirty) {
-							var x = self.x,
-								y = self.y,
-								min = 0.000001;
-							if (x < min && x > -min) { //browsers don't handle super small decimals well.
-								x = 0;
-							}
-							if (y < min && y > -min) {
-								y = 0;
-							}
-							if (rotationMode) {
-								applyObj.data.rotation = self.rotation = x;
-								applyObj.setRatio(1); //note: instead of doing TweenLite.set(), as a performance optimization we skip right to the method that renders the transforms inside CSSPlugin. For old versions of IE, though, we do a normal TweenLite.set() to leverage its ability to re-reroute to an IE-specific 2D renderer.
-							} else {
-								if (scrollProxy) {
-									if (allowY) {
-										scrollProxy.top(y);
-									}
-									if (allowX) {
-										scrollProxy.left(x);
-									}
-								} else if (xyMode) {
-									if (allowY) {
-										applyObj.data.y = y;
-									}
-									if (allowX) {
-										applyObj.data.x = x;
-									}
-									applyObj.setRatio(1); //note: instead of doing TweenLite.set(), as a performance optimization we skip right to the method that renders the transforms inside CSSPlugin. For old versions of IE, though, we do a normal TweenLite.set() to leverage its ability to re-reroute to an IE-specific 2D renderer.
-								} else {
-									if (allowY) {
-										target.style.top = y + "px";
-									}
-									if (allowX) {
-										target.style.left = x + "px";
-									}
-								}
-							}
-							if (hasDragCallback && !suppressEvents) {
-								_dispatchEvent(self, "drag", "onDrag");
-							}
-						}
-						dirty = false;
-					},
-
-					//copies the x/y from the element (whether that be transforms, top/left, or ScrollProxy's top/left) to the Draggable's x and y (and rotation if necessary) properties so that they reflect reality and it also (optionally) applies any snapping necessary. This is used by the ThrowPropsPlugin tween in an onUpdate to ensure things are synced and snapped.
-					syncXY = function(skipOnUpdate, skipSnap) {
-						var snappedValue;
-						if (!target._gsTransform && (xyMode || rotationMode)) { //just in case the _gsTransform got wiped, like if the user called clearProps on the transform or something (very rare), doing an x tween forces a re-parsing of the transforms and population of the _gsTransform.
-							TweenLite.set(target, {x:"+=0", overwrite:false});
-						}
-						if (xyMode) {
-							self.y = target._gsTransform.y;
-							self.x = target._gsTransform.x;
-						} else if (rotationMode) {
-							self.x = self.rotation = target._gsTransform.rotation;
-						} else if (scrollProxy) {
-							self.y = scrollProxy.top();
-							self.x = scrollProxy.left();
-						} else {
-							self.y = parseInt(target.style.top, 10) || 0;
-							self.x = parseInt(target.style.left, 10) || 0;
-						}
-						if ((snapX || snapY) && !skipSnap) {
-							if (snapX) {
-								snappedValue = snapX(self.x);
-								if (snappedValue !== self.x) {
-									self.x = snappedValue;
-									if (rotationMode) {
-										self.rotation = snappedValue;
-									}
-									dirty = true;
-								}
-							}
-							if (snapY) {
-								snappedValue = snapY(self.y);
-								if (snappedValue !== self.y) {
-									self.y = snappedValue;
-									dirty = true;
-								}
-							}
-							if (dirty) {
-								render(true);
-							}
-						}
-						if (vars.onThrowUpdate && !skipOnUpdate) {
-							vars.onThrowUpdate.apply(vars.onThrowUpdateScope || self, vars.onThrowUpdateParams || _emptyArray);
-						}
-					},
-
-					calculateBounds = function() {
-						var bounds, targetBounds, snap, snapIsRaw;
-						hasBounds = false;
-						if (scrollProxy) {
-							scrollProxy.calibrate();
-							self.minX = minX = -scrollProxy.maxScrollLeft();
-							self.minY = minY = -scrollProxy.maxScrollTop();
-							self.maxX = maxX = self.maxY = maxY = 0;
-							hasBounds = true;
-						} else if (!!vars.bounds) {
-							bounds = _getBounds(vars.bounds, target.parentNode); //could be a selector/jQuery object or a DOM element or a generic object like {top:0, left:100, width:1000, height:800} or {minX:100, maxX:1100, minY:0, maxY:800}
-							if (rotationMode) {
-								self.minX = minX = bounds.left;
-								self.maxX = maxX = bounds.left + bounds.width;
-								self.minY = minY = self.maxY = maxY = 0;
-							} else if (vars.bounds.maxX !== undefined || vars.bounds.maxY !== undefined) {
-								bounds = vars.bounds;
-								self.minX = minX = bounds.minX;
-								self.minY = minY = bounds.minY;
-								self.maxX = maxX = bounds.maxX;
-								self.maxY = maxY = bounds.maxY;
-							} else {
-								targetBounds = _getBounds(target, target.parentNode);
-								self.minX = minX = _getStyle(target, xProp) + bounds.left - targetBounds.left;
-								self.minY = minY = _getStyle(target, yProp) + bounds.top - targetBounds.top;
-								self.maxX = maxX = minX + (bounds.width - targetBounds.width);
-								self.maxY = maxY = minY + (bounds.height - targetBounds.height);
-							}
-							if (minX > maxX) {
-								self.minX = maxX;
-								self.maxX = maxX = minX;
-								minX = self.minX;
-							}
-							if (minY > maxY) {
-								self.minY = maxY;
-								self.maxY = maxY = minY;
-								minY = self.minY;
-							}
-							if (rotationMode) {
-								self.minRotation = minX;
-								self.maxRotation = maxX;
-							}
-							hasBounds = true;
-						}
-						if (vars.liveSnap) {
-							snap = (vars.liveSnap === true) ? (vars.snap || {}) : vars.liveSnap;
-							snapIsRaw = (snap instanceof Array || typeof(snap) === "function");
-							if (rotationMode) {
-								snapX = buildSnapFunc((snapIsRaw ? snap : snap.rotation), minX, maxX, 1);
-								snapY = null;
-							} else {
-								if (allowX) {
-									snapX = buildSnapFunc((snapIsRaw ? snap : snap.x || snap.left || snap.scrollLeft), minX, maxX, scrollProxy ? -1 : 1);
-								}
-								if (allowY) {
-									snapY = buildSnapFunc((snapIsRaw ? snap : snap.y || snap.top || snap.scrollTop), minY, maxY, scrollProxy ? -1 : 1);
-								}
-							}
-						}
-
-					},
-
-					animate = function(throwProps, forceZeroVelocity) {
-						var snap, snapIsRaw, tween;
-						if (throwProps && ThrowPropsPlugin) {
-							if (throwProps === true) {
-								snap = vars.snap || {};
-								snapIsRaw = (snap instanceof Array || typeof(snap) === "function");
-								throwProps = {resistance:(vars.throwResistance || vars.resistance || 1000) / (rotationMode ? 10 : 1)};
-								if (rotationMode) {
-									throwProps.rotation = _parseThrowProps(self, snapIsRaw ? snap : snap.rotation, maxX, minX, 1, forceZeroVelocity);
-								} else {
-									if (allowX) {
-										throwProps[xProp] = _parseThrowProps(self, snapIsRaw ? snap : snap.x || snap.left || snap.scrollLeft, maxX, minX, scrollProxy ? -1 : 1, forceZeroVelocity || (self.lockedAxis === "x"));
-									}
-									if (allowY) {
-										throwProps[yProp] = _parseThrowProps(self, snapIsRaw ? snap : snap.y || snap.top || snap.scrollTop, maxY, minY, scrollProxy ? -1 : 1, forceZeroVelocity || (self.lockedAxis === "y"));
-									}
-								}
-							}
-							self.tween = tween = ThrowPropsPlugin.to(scrollProxy || target, {throwProps:throwProps, ease:(vars.ease || _globals.Power3.easeOut), onComplete:vars.onThrowComplete, onCompleteParams:vars.onThrowCompleteParams, onCompleteScope:(vars.onThrowCompleteScope || self), onUpdate:(vars.fastMode ? vars.onThrowUpdate : syncXY), onUpdateParams:(vars.fastMode ? vars.onThrowUpdateParams : null), onUpdateScope:(vars.onThrowUpdateScope || self)}, (isNaN(vars.maxDuration) ? 2 : vars.maxDuration), (isNaN(vars.minDuration) ? 0.5 : vars.minDuration), (isNaN(vars.overshootTolerance) ? (1 - self.edgeResistance) + 0.2 : vars.overshootTolerance));
-							if (!vars.fastMode) {
-								//to populate the end values, we just scrub the tween to the end, record the values, and then jump back to the beginning.
-								if (scrollProxy) {
-									scrollProxy._suspendTransforms = true; //Microsoft browsers have a bug that causes them to briefly render the position incorrectly (it flashes to the end state when we seek() the tween even though we jump right back to the current position, and this only seems to happen when we're affecting both top and left), so we set a _suspendTransforms flag to prevent it from actually applying the values in the ScrollProxy.
-								}
-								tween.render(tween.duration(), true, true);
-								syncXY(true, true);
-								self.endX = self.x;
-								self.endY = self.y;
-								if (rotationMode) {
-									self.endRotation = self.x;
-								}
-								tween.play(0);
-								syncXY(true, true);
-								if (scrollProxy) {
-									scrollProxy._suspendTransforms = false;
-								}
-							}
-						} else if (hasBounds) {
-							self.applyBounds();
-						}
-					},
-
-					updateMatrix = function() {
-						matrix = _getConcatenatedMatrix(target.parentNode, true);
-						if (!matrix[1] && !matrix[2] && matrix[0] == 1 && matrix[3] == 1 && matrix[4] == 0 && matrix[5] == 0) { //if there are no transforms, we can optimize performance by not factoring in the matrix
-							matrix = null;
-						}
-					},
-
-					recordStartPositions = function() {
-						var edgeTolerance = 1 - self.edgeResistance;
-						updateMatrix();
-						if (scrollProxy) {
-							calculateBounds();
-							startElementY = scrollProxy.top();
-							startElementX = scrollProxy.left();
-						} else {
-							//if the element is in the process of tweening, don't force snapping to occur because it could make it jump. Imagine the user throwing, then before it's done, clicking on the element in its inbetween state.
-							if (isTweening()) {
-								syncXY(true, true);
-								calculateBounds();
-							} else {
-								self.applyBounds();
-							}
-							if (rotationMode) {
-								rotationOrigin = _localToGlobal(target, {x:0, y:0});
-								syncXY(true, true);
-								startElementX = self.x; //starting rotation (x always refers to rotation in type:"rotation", measured in degrees)
-								startElementY = self.y = Math.atan2(rotationOrigin.y - startPointerY, startPointerX - rotationOrigin.x) * _RAD2DEG;
-							} else {
-								startScrollTop = target.parentNode ? target.parentNode.scrollTop || 0 : 0;
-								startScrollLeft = target.parentNode ? target.parentNode.scrollLeft || 0 : 0;
-								startElementY = _getStyle(target, yProp); //record the starting top and left values so that we can just add the mouse's movement to them later.
-								startElementX = _getStyle(target, xProp);
-							}
-						}
-						if (hasBounds && edgeTolerance) {
-							if (startElementX > maxX) {
-								startElementX = maxX + (startElementX - maxX) / edgeTolerance;
-							} else if (startElementX < minX) {
-								startElementX = minX - (minX - startElementX) / edgeTolerance;
-							}
-							if (!rotationMode) {
-								if (startElementY > maxY) {
-									startElementY = maxY + (startElementY - maxY) / edgeTolerance;
-								} else if (startElementY < minY) {
-									startElementY = minY - (minY - startElementY) / edgeTolerance;
-								}
-							}
-						}
-					},
-
-					isTweening = function() {
-						return (self.tween && self.tween.isActive());
-					},
-
-					buildSnapFunc = function(snap, min, max, factor) {
-						if (typeof(snap) === "function") {
-							return function(n) {
-								var edgeTolerance = !self.isPressed ? 1 : 1 - self.edgeResistance; //if we're tweening, disable the edgeTolerance because it's already factored into the tweening values (we don't want to apply it multiple times)
-								return snap.call(self, (n > max ? max + (n - max) * edgeTolerance : (n < min) ? min + (n - min) * edgeTolerance : n)) * factor;
-							};
-						}
-						if (snap instanceof Array) {
-							return function(n) {
-								var i = snap.length,
-									closest = 0,
-									absDif = _max,
-									val, dif;
-								while (--i > -1) {
-									val = snap[i];
-									dif = val - n;
-									if (dif < 0) {
-										dif = -dif;
-									}
-									if (dif < absDif && val >= min && val <= max) {
-										closest = i;
-										absDif = dif;
-									}
-								}
-								return snap[closest];
-							};
-						}
-						return isNaN(snap) ? function(n) { return n; } : function() { return snap * factor; };
-					},
-
-					//called when the mouse is pressed (or touch starts)
-					onPress = function(e) {
-						var temp, i;
-						if (!enabled || self.isPressed || !e || (e.type === "mousedown" && _getTime() - clickTime < 30 && _touchEventLookup[self.pointerEvent.type])) { //when we DON'T preventDefault() in order to accommodate touch-scrolling and the user just taps, many browsers also fire a mousedown/mouseup sequence AFTER the touchstart/touchend sequence, thus it'd result in two quick "click" events being dispatched. This line senses that condition and halts it on the subsequent mousedown.
-							return;
-						}
-						interrupted = isTweening();
-						self.pointerEvent = e;
-						if (_touchEventLookup[e.type]) { //note: on iOS, BOTH touchmove and mousemove are dispatched, but the mousemove has pageY and pageX of 0 which would mess up the calculations and needlessly hurt performance.
-							touchEventTarget = (e.type.indexOf("touch") !== -1) ? e.currentTarget : _doc; //pointer-based touches (for Microsoft browsers) don't remain locked to the original target like other browsers, so we must use the document instead. The event type would be "MSPointerDown" or "pointerdown".
-							_addListener(touchEventTarget, "touchend", onRelease);
-							_addListener(touchEventTarget, "touchmove", onMove);
-							_addListener(touchEventTarget, "touchcancel", onRelease);
-							_addListener(_doc, "touchstart", _onMultiTouchDocument);
-						} else {
-							touchEventTarget = null;
-							_addListener(_doc, "mousemove", onMove); //attach these to the document instead of the box itself so that if the user's mouse moves too quickly (and off of the box), things still work.
-						}
-						touchDragAxis = null;
-						_addListener(_doc, "mouseup", onRelease);
-						if (e && e.target) {
-							_addListener(e.target, "mouseup", onRelease); //we also have to listen directly on the element because some browsers don't bubble up the event to the _doc on elements with contentEditable="true"
-						}
-						isClicking = (isClickable.call(self, e.target) && !vars.dragClickables);
-						if (isClicking) {
-							_addListener(e.target, "change", onRelease); //in some browsers, when you mousedown on a <select> element, no mouseup gets dispatched! So we listen for a "change" event instead.
-							_dispatchEvent(self, "press", "onPress");
-							_setSelectable(triggers, true); //accommodates things like inputs and elements with contentEditable="true" (otherwise user couldn't drag to select text)
-							return;
-						}
-						allowNativeTouchScrolling = (!touchEventTarget || allowX === allowY || scrollProxy || self.vars.allowNativeTouchScrolling === false) ? false : allowX ? "y" : "x";
-						if (_isOldIE) {
-							e = _populateIEEvent(e, true);
-						} else if (!allowNativeTouchScrolling && !self.allowEventDefault) {
-							e.preventDefault();
-							if (e.preventManipulation) {
-								e.preventManipulation();  //for some Microsoft browsers
-							}
-						}
-						if (e.changedTouches) { //touch events store the data slightly differently
-							e = touch = e.changedTouches[0];
-							touchID = e.identifier;
-						} else if (e.pointerId) {
-							touchID = e.pointerId; //for some Microsoft browsers
-						} else {
-							touch = null;
-						}
-						_dragCount++;
-						_addToRenderQueue(render); //causes the Draggable to render on each "tick" of TweenLite.ticker (performance optimization - updating values in a mousemove can cause them to happen too frequently, like multiple times between frame redraws which is wasteful, and it also prevents values from updating properly in IE8)
-						startPointerY = self.pointerY = e.pageY; //record the starting x and y so that we can calculate the movement from the original in _onMouseMove
-						startPointerX = self.pointerX = e.pageX;
-						if (allowNativeTouchScrolling || self.autoScroll) {
-							_recordMaxScrolls(target.parentNode);
-						}
-						if (self.autoScroll && !rotationMode && !scrollProxy && target.parentNode && !target.getBBox && target.parentNode._gsMaxScrollX && !_placeholderDiv.parentNode) {//add a placeholder div to prevent the parent container from collapsing when the user drags the element left.
-							_placeholderDiv.style.width = (target.parentNode.scrollWidth) + "px";
-							target.parentNode.appendChild(_placeholderDiv);
-						}
-						recordStartPositions();
-						if (matrix) {
-							temp = startPointerX * matrix[0] + startPointerY * matrix[2] + matrix[4];
-							startPointerY = startPointerX * matrix[1] + startPointerY * matrix[3] + matrix[5];
-							startPointerX = temp;
-						}
-						if (self.tween) {
-							self.tween.kill();
-						}
-						TweenLite.killTweensOf(scrollProxy || target, true, killProps); //in case the user tries to drag it before the last tween is done.
-						if (scrollProxy) {
-							TweenLite.killTweensOf(target, true, {scrollTo:1}); //just in case the original target's scroll position is being tweened somewhere else.
-						}
-						self.tween = self.lockedAxis = null;
-						if (vars.zIndexBoost || (!rotationMode && !scrollProxy && vars.zIndexBoost !== false)) {
-							target.style.zIndex = Draggable.zIndex++;
-						}
-						self.isPressed = true;
-						hasDragCallback = !!(vars.onDrag || self._listeners.drag);
-						if (!rotationMode) {
-							i = triggers.length;
-							while (--i > -1) {
-								_setStyle(triggers[i], "cursor", vars.cursor || "move");
-							}
-						}
-						_dispatchEvent(self, "press", "onPress");
-					},
-
-					//called every time the mouse/touch moves
-					onMove = function(e) {
-						var originalEvent = e,
-							touches, pointerX, pointerY, i;
-						if (!enabled || _isMultiTouching || !self.isPressed || !e) {
-							return;
-						}
-						self.pointerEvent = e;
-						touches = e.changedTouches;
-						if (touches) { //touch events store the data slightly differently
-							e = touches[0];
-							if (e !== touch && e.identifier !== touchID) { //Usually changedTouches[0] will be what we're looking for, but in case it's not, look through the rest of the array...(and Android browsers don't reuse the event like iOS)
-								i = touches.length;
-								while (--i > -1 && (e = touches[i]).identifier !== touchID) {}
-								if (i < 0) {
-									return;
-								}
-							}
-						} else if (e.pointerId && touchID && e.pointerId !== touchID) { //for some Microsoft browsers, we must attach the listener to the doc rather than the trigger so that when the finger moves outside the bounds of the trigger, things still work. So if the event we're receiving has a pointerId that doesn't match the touchID, ignore it (for multi-touch)
-							return;
-						}
-						if (_isOldIE) {
-							e = _populateIEEvent(e, true);
-						} else {
-							if (touchEventTarget && allowNativeTouchScrolling && !touchDragAxis) { //Android browsers force us to decide on the first "touchmove" event if we should allow the default (scrolling) behavior or preventDefault(). Otherwise, a "touchcancel" will be fired and then no "touchmove" or "touchend" will fire during the scrolling (no good).
-								pointerX = e.pageX;
-								pointerY = e.pageY;
-								if (matrix) {
-									i = pointerX * matrix[0] + pointerY * matrix[2] + matrix[4];
-									pointerY = pointerX * matrix[1] + pointerY * matrix[3] + matrix[5];
-									pointerX = i;
-								}
-								touchDragAxis = (Math.abs(pointerX - startPointerX) > Math.abs(pointerY - startPointerY) && allowX) ? "x" : "y";
-								if (self.vars.lockAxisOnTouchScroll !== false) {
-									self.lockedAxis = (touchDragAxis === "x") ? "y" : "x";
-									if (typeof(self.vars.onLockAxis) === "function") {
-										self.vars.onLockAxis.call(self, originalEvent);
-									}
-								}
-								if (_isAndroid && allowNativeTouchScrolling === touchDragAxis) {
-									onRelease(originalEvent);
-									return;
-								}
-							}
-							if (!self.allowEventDefault && (!allowNativeTouchScrolling || (touchDragAxis && allowNativeTouchScrolling !== touchDragAxis)) && originalEvent.cancelable !== false) {
-								originalEvent.preventDefault();
-								if (originalEvent.preventManipulation) { //for some Microsoft browsers
-									originalEvent.preventManipulation();
-								}
-							}
-						}
-						if (self.autoScroll) {
-							checkAutoScrollBounds = true;
-						}
-						setPointerPosition(e.pageX, e.pageY);
-					},
-
-					setPointerPosition = function(pointerX, pointerY) {
-						var dragTolerance = 1 - self.dragResistance,
-							edgeTolerance = 1 - self.edgeResistance,
-							xChange, yChange, x, y, dif, temp;
-
-						self.pointerX = pointerX;
-						self.pointerY = pointerY;
-
-						if (rotationMode) {
-							y = Math.atan2(rotationOrigin.y - pointerY, pointerX - rotationOrigin.x) * _RAD2DEG;
-							dif = self.y - y;
-							self.y = y;
-							if (dif > 180) {
-								startElementY -= 360;
-							} else if (dif < -180) {
-								startElementY += 360;
-							}
-							x = startElementX + (startElementY - y) * dragTolerance;
-
-						} else {
-							if (matrix) {
-								temp = pointerX * matrix[0] + pointerY * matrix[2] + matrix[4];
-								pointerY = pointerX * matrix[1] + pointerY * matrix[3] + matrix[5];
-								pointerX = temp;
-							}
-							yChange = (pointerY - startPointerY);
-							xChange = (pointerX - startPointerX);
-							if (yChange < minimumMovement && yChange > -minimumMovement) {
-								yChange = 0;
-							}
-							if (xChange < minimumMovement && xChange > -minimumMovement) {
-								xChange = 0;
-							}
-							if ((self.lockAxis || self.lockedAxis) && (xChange || yChange)) {
-								temp = self.lockedAxis;
-								if (!temp) {
-									self.lockedAxis = temp = (allowX && Math.abs(xChange) > Math.abs(yChange)) ? "y" : allowY ? "x" : null;
-									if (temp && typeof(self.vars.onLockAxis) === "function") {
-										self.vars.onLockAxis.call(self, self.pointerEvent);
-									}
-								}
-								if (temp === "y") {
-									yChange = 0;
-								} else if (temp === "x") {
-									xChange = 0;
-								}
-							}
-							x = startElementX + xChange * dragTolerance;
-							y = startElementY + yChange * dragTolerance;
-						}
-
-						if (snapX || snapY) {
-							if (snapX) {
-								x = snapX(x);
-							}
-							if (snapY) {
-								y = snapY(y);
-							}
-						} else if (hasBounds) {
-							if (x > maxX) {
-								x = maxX + (x - maxX) * edgeTolerance;
-							} else if (x < minX) {
-								x = minX + (x - minX) * edgeTolerance;
-							}
-							if (!rotationMode) {
-								if (y > maxY) {
-									y = maxY + (y - maxY) * edgeTolerance;
-								} else if (y < minY) {
-									y = minY + (y - minY) * edgeTolerance;
-								}
-							}
-						}
-						if (!rotationMode) {
-							x = Math.round(x); //helps work around an issue with some Win Touch devices
-							y = Math.round(y);
-						}
-						if (self.x !== x || (self.y !== y && !rotationMode)) {
-							self.x = self.endX = x;
-							if (rotationMode) {
-								self.endRotation = x;
-							} else {
-								self.y = self.endY = y;
-							}
-							dirty = true; //a flag that indicates we need to render the target next time the TweenLite.ticker dispatches a "tick" event (typically on a requestAnimationFrame) - this is a performance optimization (we shouldn't render on every move because sometimes many move events can get dispatched between screen refreshes, and that'd be wasteful to render every time)
-							if (!self.isDragging) {
-								self.isDragging = true;
-								_dispatchEvent(self, "dragstart", "onDragStart");
-							}
-						}
-					},
-
-					//called when the mouse/touch is released
-					onRelease = function(e, force) {
-						if (!enabled || !self.isPressed || e && touchID && !force && e.pointerId && e.pointerId !== touchID) {  //for some Microsoft browsers, we must attach the listener to the doc rather than the trigger so that when the finger moves outside the bounds of the trigger, things still work. So if the event we're receiving has a pointerId that doesn't match the touchID, ignore it (for multi-touch)
-							return;
-						}
-						self.isPressed = false;
-						var originalEvent = e,
-							wasDragging = self.isDragging,
-							touches, i, syntheticEvent, eventTarget;
-						if (touchEventTarget) {
-							_removeListener(touchEventTarget, "touchend", onRelease);
-							_removeListener(touchEventTarget, "touchmove", onMove);
-							_removeListener(touchEventTarget, "touchcancel", onRelease);
-							_removeListener(_doc, "touchstart", _onMultiTouchDocument);
-						} else {
-							_removeListener(_doc, "mousemove", onMove);
-						}
-						_removeListener(_doc, "mouseup", onRelease);
-						if (e && e.target) {
-							_removeListener(e.target, "mouseup", onRelease);
-						}
-						dirty = false;
-						if (_placeholderDiv.parentNode) { //_placeholderDiv just props open auto-scrolling containers so they don't collapse as the user drags left/up.
-							_placeholderDiv.parentNode.removeChild(_placeholderDiv);
-						}
-						if (isClicking) {
-							if (e) {
-								_removeListener(e.target, "change", onRelease);
-							}
-							_setSelectable(triggers, false);
-							_dispatchEvent(self, "release", "onRelease");
-							_dispatchEvent(self, "click", "onClick");
-							isClicking = false;
-							return;
-						}
-						_removeFromRenderQueue(render);
-						if (!rotationMode) {
-							i = triggers.length;
-							while (--i > -1) {
-								_setStyle(triggers[i], "cursor", vars.cursor || "move");
-							}
-						}
-						if (wasDragging) {
-							dragEndTime = _lastDragTime = _getTime();
-							self.isDragging = false;
-						}
-						_dragCount--;
-						if (e) {
-							if (_isOldIE) {
-								e = _populateIEEvent(e, false);
-							}
-							touches = e.changedTouches;
-							if (touches) { //touch events store the data slightly differently
-								e = touches[0];
-								if (e !== touch && e.identifier !== touchID) { //Usually changedTouches[0] will be what we're looking for, but in case it's not, look through the rest of the array...(and Android browsers don't reuse the event like iOS)
-									i = touches.length;
-									while (--i > -1 && (e = touches[i]).identifier !== touchID) {}
-									if (i < 0) {
-										return;
-									}
-								}
-							}
-							self.pointerEvent = originalEvent;
-							self.pointerX = e.pageX;
-							self.pointerY = e.pageY;
-						}
-						if (originalEvent && !wasDragging) {
-							if (interrupted && (vars.snap || vars.bounds)) { //otherwise, if the user clicks on the object while it's animating to a snapped position, and then releases without moving 3 pixels, it will just stay there (it should animate/snap)
-								animate(vars.throwProps);
-							}
-							_dispatchEvent(self, "release", "onRelease");
-							if (!_isAndroid || originalEvent.type !== "touchmove") { //to accommodate native scrolling on Android devices, we have to immediately call onRelease() on the first touchmove event, but that shouldn't trigger a "click".
-								_dispatchEvent(self, "click", "onClick");
-								eventTarget = originalEvent.target || originalEvent.srcElement || target; //old IE uses srcElement
-								if (eventTarget.click) { //some browsers (like mobile Safari) don't properly trigger the click event
-									eventTarget.click();
-								}
-								else if (_doc.createEvent) {
-									syntheticEvent = _doc.createEvent("MouseEvents");
-									syntheticEvent.initEvent("click", true, true);
-									eventTarget.dispatchEvent(syntheticEvent);
-								}
-								clickTime = _getTime();
-							}
-						} else {
-							animate(vars.throwProps); //will skip if throwProps isn't defined or ThrowPropsPlugin isn't loaded.
-							if (!_isOldIE && !self.allowEventDefault && originalEvent && (vars.dragClickables || !isClickable.call(self, originalEvent.target)) && wasDragging && (!allowNativeTouchScrolling || (touchDragAxis && allowNativeTouchScrolling === touchDragAxis)) && originalEvent.cancelable !== false) {
-								originalEvent.preventDefault();
-								if (originalEvent.preventManipulation) {
-									originalEvent.preventManipulation();  //for some Microsoft browsers
-								}
-							}
-							_dispatchEvent(self, "release", "onRelease");
-						}
-						if (wasDragging) {
-							_dispatchEvent(self, "dragend", "onDragEnd");
-						}
-						return true;
-					},
-
-					updateScroll = function(e) {
-						if (e && self.isDragging) {
-							var parent = e.target || e.srcElement || target.parentNode,
-								deltaX = parent.scrollLeft - parent._gsScrollX,
-								deltaY = parent.scrollTop - parent._gsScrollY;
-							if (deltaX || deltaY) {
-								startPointerX -= deltaX;
-								startPointerY -= deltaY;
-								parent._gsScrollX += deltaX;
-								parent._gsScrollY += deltaY;
-								setPointerPosition(self.pointerX, self.pointerY);
-							}
-						}
-					},
-
-					onClick = function(e) {
-						var time = _getTime(),
-							recentlyClicked = time - clickTime < 40,
-							recentlyDragged = time - dragEndTime < 40;
-						if (self.isPressed || recentlyDragged || recentlyClicked) {
-							if (e.preventDefault) {
-								e.preventDefault();
-								if (recentlyClicked || (recentlyDragged && self.vars.suppressClickOnDrag !== false)) {
-									e.stopImmediatePropagation(); //otherwise some browsers bubble up click events, creating a duplicate.
-								}
-							} else {
-								e.returnValue = false;
-							}
-							if (e.preventManipulation) {
-								e.preventManipulation();  //for some Microsoft browsers
-							}
-						}
-					};
-
-				old = Draggable.get(this.target);
-				if (old) {
-					old.kill(); // avoids duplicates (an element can only be controlled by one Draggable)
-				}
-
-				//give the user access to start/stop dragging...
-				this.startDrag = function(e) {
-					onPress(e);
-					if (!self.isDragging) {
-						self.isDragging = true;
-						_dispatchEvent(self, "dragstart", "onDragStart");
-					}
-				};
-				this.drag = onMove;
-				this.endDrag = function(e) {
-					onRelease(e, true);
-				};
-				this.timeSinceDrag = function() {
-					return self.isDragging ? 0 : (_getTime() - dragEndTime) / 1000;
-				};
-				this.hitTest = function(target, threshold) {
-					return Draggable.hitTest(self.target, target, threshold);
-				};
-
-				this.getDirection = function(from, diagonalThreshold) { //from can be "start" (default), "velocity", or an element
-					var mode = (from === "velocity" && ThrowPropsPlugin) ? from : (typeof(from) === "object" && !rotationMode) ? "element" : "start",
-						xChange, yChange, ratio, direction, r1, r2;
-					if (mode === "element") {
-						r1 = _parseRect(self.target);
-						r2 = _parseRect(from);
-					}
-					xChange = (mode === "start") ? self.x - startElementX : (mode === "velocity") ? ThrowPropsPlugin.getVelocity(this.target, xProp) : (r1.left + r1.width / 2) - (r2.left + r2.width / 2);
-					if (rotationMode) {
-						return xChange < 0 ? "counter-clockwise" : "clockwise";
-					} else {
-						diagonalThreshold = diagonalThreshold || 2;
-						yChange = (mode === "start") ? self.y - startElementY : (mode === "velocity") ? ThrowPropsPlugin.getVelocity(this.target, yProp) : (r1.top + r1.height / 2) - (r2.top + r2.height / 2);
-						ratio = Math.abs(xChange / yChange);
-						direction = (ratio < 1 / diagonalThreshold) ? "" : (xChange < 0) ? "left" : "right";
-						if (ratio < diagonalThreshold) {
-							if (direction !== "") {
-								direction += "-";
-							}
-							direction += (yChange < 0) ? "up" : "down";
-						}
-					}
-					return direction;
-				};
-
-
-				this.applyBounds = function(newBounds) {
-					var x, y;
-					if (newBounds && vars.bounds !== newBounds) {
-						vars.bounds = newBounds;
-						return self.update(true);
-					}
-					syncXY(true);
-					calculateBounds();
-					if (hasBounds) {
-						x = self.x;
-						y = self.y;
-						if (hasBounds) {
-							if (x > maxX) {
-								x = maxX;
-							} else if (x < minX) {
-								x = minX;
-							}
-							if (y > maxY) {
-								y = maxY;
-							} else if (y < minY) {
-								y = minY;
-							}
-						}
-						if (self.x !== x || self.y !== y) {
-							self.x = self.endX = x;
-							if (rotationMode) {
-								self.endRotation = x;
-							} else {
-								self.y = self.endY = y;
-							}
-							dirty = true;
-							render();
-						}
-					}
-					return self;
-				};
-
-				this.update = function(applyBounds) {
-					var x = self.x,
-						y = self.y;
-					updateMatrix();
-					if (applyBounds) {
-						self.applyBounds();
-					} else {
-						if (dirty) {
-							render();
-						}
-						syncXY(true);
-					}
-					if (self.isPressed && ((allowX && Math.abs(x - self.x) > 0.01) || (allowY && (Math.abs(y - self.y) > 0.01 && !rotationMode)))) {
-						recordStartPositions();
-					}
-					return self;
-				};
-
-				this.enable = function(type) {
-					var id, i, trigger;
-					if (type !== "soft") {
-						i = triggers.length;
-						while (--i > -1) {
-							trigger = triggers[i];
-							_addListener(trigger, "mousedown", onPress);
-							_addListener(trigger, "touchstart", onPress);
-							_addListener(trigger, "click", onClick, true);
-							if (!rotationMode) {
-								_setStyle(trigger, "cursor", vars.cursor || "move");
-							}
-							_setStyle(trigger, "touchCallout", "none");
-							_setStyle(trigger, "touchAction", (allowX === allowY || scrollProxy) ? "none" : allowX ? "pan-y" : "pan-x");
-						}
-						_setSelectable(triggers, false);
-					}
-					_addScrollListener(self.target, updateScroll);
-					enabled = true;
-					if (ThrowPropsPlugin && type !== "soft") {
-						ThrowPropsPlugin.track(scrollProxy || target, (xyMode ? "x,y" : rotationMode ? "rotation" : "top,left"));
-					}
-					if (scrollProxy) {
-						scrollProxy.enable();
-					}
-					target._gsDragID = id = "d" + (_lookupCount++);
-					_lookup[id] = this;
-					if (scrollProxy) {
-						scrollProxy.element._gsDragID = id;
-					}
-					TweenLite.set(target, {x:"+=0", overwrite:false}); //simply ensures that there's a _gsTransform on the element.
-					applyObj = {
-						t:target,
-						data:_isOldIE ? cssVars : target._gsTransform,
-						tween:{},
-						setRatio:(_isOldIE ? function() { TweenLite.set(target, tempVars); } : CSSPlugin._internals.setTransformRatio || CSSPlugin._internals.set3DTransformRatio)
-					};
-					this.update(true);
-					return self;
-				};
-
-				this.disable = function(type) {
-					var dragging = this.isDragging,
-						i, trigger;
-					if (!rotationMode) {
-						i = triggers.length;
-						while (--i > -1) {
-							_setStyle(triggers[i], "cursor", null);
-						}
-					}
-					if (type !== "soft") {
-						i = triggers.length;
-						while (--i > -1) {
-							trigger = triggers[i];
-							_setStyle(trigger, "touchCallout", null);
-							_setStyle(trigger, "touchAction", null);
-							_removeListener(trigger, "mousedown", onPress);
-							_removeListener(trigger, "touchstart", onPress);
-							_removeListener(trigger, "click", onClick);
-						}
-						_setSelectable(triggers, true);
-						if (touchEventTarget) {
-							_removeListener(touchEventTarget, "touchcancel", onRelease);
-							_removeListener(touchEventTarget, "touchend", onRelease);
-							_removeListener(touchEventTarget, "touchmove", onMove);
-						}
-						_removeListener(_doc, "mouseup", onRelease);
-						_removeListener(_doc, "mousemove", onMove);
-					}
-					_removeScrollListener(target, updateScroll);
-					enabled = false;
-					if (ThrowPropsPlugin && type !== "soft") {
-						ThrowPropsPlugin.untrack(scrollProxy || target, (xyMode ? "x,y" : rotationMode ? "rotation" : "top,left"));
-					}
-					if (scrollProxy) {
-						scrollProxy.disable();
-					}
-					_removeFromRenderQueue(render);
-					this.isDragging = this.isPressed = isClicking = false;
-					if (dragging) {
-						_dispatchEvent(this, "dragend", "onDragEnd");
-					}
-					return self;
-				};
-
-				this.enabled = function(value, type) {
-					return arguments.length ? (value ? this.enable(type) : this.disable(type)) : enabled;
-				};
-
-				this.kill = function() {
-					TweenLite.killTweensOf(scrollProxy || target, true, killProps);
-					self.disable();
-					delete _lookup[target._gsDragID];
-					return self;
-				};
-
-				if (type.indexOf("scroll") !== -1) {
-					scrollProxy = this.scrollProxy = new ScrollProxy(target, _extend({onKill:function() { //ScrollProxy's onKill() gets called if/when the ScrollProxy senses that the user interacted with the scroll position manually (like using the scrollbar). IE9 doesn't fire the "mouseup" properly when users drag the scrollbar of an element, so this works around that issue.
-						if (self.isPressed) {
-							onRelease(null);
-						}}}, vars));
-					//a bug in many Android devices' stock browser causes scrollTop to get forced back to 0 after it is altered via JS, so we set overflow to "hidden" on mobile/touch devices (they hide the scroll bar anyway). That works around the bug. (This bug is discussed at https://code.google.com/p/android/issues/detail?id=19625)
-					target.style.overflowY = (allowY && !_isTouchDevice) ? "auto" : "hidden";
-					target.style.overflowX = (allowX && !_isTouchDevice) ? "auto" : "hidden";
-					target = scrollProxy.content;
-				}
-
-				if (vars.force3D !== false) {
-					TweenLite.set(target, {force3D:true}); //improve performance by forcing a GPU layer when possible
-				}
-				if (rotationMode) {
-					killProps.rotation = 1;
-				} else {
-					if (allowX) {
-						killProps[xProp] = 1;
-					}
-					if (allowY) {
-						killProps[yProp] = 1;
-					}
-				}
-				if (rotationMode) {
-					tempVars = _tempVarsRotation;
-					cssVars = tempVars.css;
-					tempVars.overwrite = false;
-				} else if (xyMode) {
-					tempVars = (allowX && allowY) ? _tempVarsXY : allowX ? _tempVarsX : _tempVarsY;
-					cssVars = tempVars.css;
-					tempVars.overwrite = false;
-				}
-
-				this.enable();
-			},
-			p = Draggable.prototype = new EventDispatcher();
-
-		p.constructor = Draggable;
-		p.pointerX = p.pointerY = 0;
-		p.isDragging = p.isPressed = false;
-		Draggable.version = "0.13.0";
-		Draggable.zIndex = 1000;
-
-		_addListener(_doc, "touchcancel", function() {
-			//some older Android devices intermittently stop dispatching "touchmove" events if we don't listen for "touchcancel" on the document. Very strange indeed.
-		});
-		_addListener(_doc, "contextmenu", function(e) {
-			var p;
-			for (p in _lookup) {
-				if (_lookup[p].isPressed) {
-					_lookup[p].endDrag();
-				}
+			}();
+		}
+	}, {
+		key: 'setControllers',
+		value: function setControllers() {
+			var _this2 = this;
+
+			var key = void 0;
+			var folder;
+			var folders = this.gui.addFolder('General');
+			folders.add(this.beats.media, 'playbackRate', [0.5, 1.0, 1.5, 2.0]).name('playbackRate');
+
+			//# Add controller to repear a phase
+			var phases = { repeat: null };
+			this.phasesNames = ['none'];
+
+			var i = this.beats.phases.length;
+			while (i--) {
+				this.phasesNames[this.phasesNames.length++] = ('000' + i).substr(-3);
 			}
-		});
 
-		Draggable.create = function(targets, vars) {
-			if (typeof(targets) === "string") {
-				targets = TweenLite.selector(targets);
+			folders.add(phases, 'repeat', this.phasesNames).name('repeatPhase').onChange(this.repeatPhase);
+
+			//# Store name of modulators to be able to change it in keys controllers
+			var modulatorsNames = ['none'];
+
+			folders = this.gui.addFolder('Modulators');
+			var modulators = this.beats.modulators;
+
+
+			var iterable = __range__(0, this.beats.modulators.length, false);
+			for (var j = 0; j < iterable.length; j++) {
+
+				i = iterable[j];
+				var modulator = this.beats.modulators[i];
+
+				//# Add folder for each modulator and store its name
+				var folder = folders.addFolder(modulator.name);
+				modulatorsNames[modulatorsNames.length++] = modulator.name;
+
+				var filter = modulator.filter;
+
+
+				var frequency = folder.add(filter.frequency, 'value', 0, 40000);
+				frequency.name('frequency');
+
+				folder.add(filter.Q, 'value', 0, 10).name('Q');
+				folder.add(filter.gain, 'value', 0, 10).name('gain');
 			}
-			var a = _isArrayLike(targets) ? _flattenArray(targets) : [targets],
-				i = a.length;
-			while (--i > -1) {
-				a[i] = new Draggable(a[i], vars);
+
+			folders = this.gui.addFolder('Keys');
+			var keys = this.beats.keys;
+
+
+			return __range__(0, this.beats.keys.length, false).map(function (i) {
+				return key = _this2.beats.keys[i],
+				//# Add folder for each key
+				folder = folders.addFolder(key.name), folder.add(key, 'active').listen().onChange(_this2.updateKeys), folder.add(key, 'type', ['average', 'max']).listen().onChange(_this2.updateKeys), folder.add(key, 'start', 0, _this2.levelCount).listen().step(1).onChange(_this2.updateKeys), folder.add(key, 'end', 0, _this2.levelCount).listen().step(1).onChange(_this2.updateKeys), folder.add(key, 'min', 0, 1).listen().step(0.01).onChange(_this2.updateKeys), folder.add(key, 'max', 0, 1).listen().step(0.01).onChange(_this2.updateKeys), folder.add(key, 'smoothness', 1, 100).listen().onChange(_this2.updateKeys), folder.add(key, 'modulator', modulatorsNames).listen().onChange(_this2.updateKeys);
+			});
+		}
+	}, {
+		key: 'update',
+		value: function update(force) {
+			//# Loop through one phase if the parameters is set
+			if (this.loop != null && this.beats.currentTime >= this.loop.end.time) {
+				this.beats.media.currentTime = this.loop.start.time;
+				this.beats.position = this.loop.index;
 			}
-			return a;
-		};
 
-		Draggable.get = function(target) {
-			return _lookup[(_unwrapElement(target) || {})._gsDragID];
-		};
-
-		Draggable.timeSinceDrag = function() {
-			return (_getTime() - _lastDragTime) / 1000;
-		};
-
-		var _parseRect = function(e, undefined) { //accepts a DOM element, a mouse event, or a rectangle object and returns the corresponding rectangle with left, right, width, height, top, and bottom properties
-			var r = (e.pageX !== undefined) ? {left:e.pageX, top:e.pageY, right:e.pageX + 1, bottom:e.pageY + 1} : (!e.nodeType && e.left !== undefined && e.top !== undefined) ? e : _unwrapElement(e).getBoundingClientRect();
-			if (r.right === undefined && r.width !== undefined) {
-				r.right = r.left + r.width;
-				r.bottom = r.top + r.height;
-			} else if (r.width === undefined) { //some browsers don't include width and height properties. We can't just set them directly on r because some browsers throw errors, so create a new generic object.
-				r = {width: r.right - r.left, height: r.bottom - r.top, right: r.right, left: r.left, bottom: r.bottom, top: r.top};
+			if (!this.outcome.initialize) {
+				force = true;
+				this.start();
 			}
-			return r;
-		};
 
-		Draggable.hitTest = function(obj1, obj2, threshold) {
-			if (obj1 === obj2) {
-				return false;
+			//# Update all the UI element
+			if (this.beats.media != null && !this.beats.media.paused || force) {
+				this.outcome.update();
+				this.spectrum.update(this.beats.output);
+				this.track.update();
+
+				return force = false;
 			}
-			var r1 = _parseRect(obj1),
-				r2 = _parseRect(obj2),
-				isOutside = (r2.left > r1.right || r2.right < r1.left || r2.top > r1.bottom || r2.bottom < r1.top),
-				overlap, area, isRatio;
-			if (isOutside || !threshold) {
-				return !isOutside;
-			}
-			isRatio = ((threshold + "").indexOf("%") !== -1);
-			threshold = parseFloat(threshold) || 0;
-			overlap = {left:Math.max(r1.left, r2.left), top:Math.max(r1.top, r2.top)};
-			overlap.width = Math.min(r1.right, r2.right) - overlap.left;
-			overlap.height = Math.min(r1.bottom, r2.bottom) - overlap.top;
-			if (overlap.width < 0 || overlap.height < 0) {
-				return false;
-			}
-			if (isRatio) {
-				threshold *= 0.01;
-				area = overlap.width * overlap.height;
-				return (area >= r1.width * r1.height * threshold || area >= r2.width * r2.height * threshold);
-			}
-			return (overlap.width > threshold && overlap.height > threshold);
-		};
+		}
+	}, {
+		key: 'resize',
+		value: function resize() {
 
-		_placeholderDiv.style.cssText = "visibility:hidden;height:1px;top:-1px;pointer-events:none;position:relative;clear:both;";
+			this.outcome.resize();
+			this.spectrum.resize();
+			return this.track.resize();
+		}
+	}]);
 
-		return Draggable;
+	return GUI;
+}();
 
-	}, true);
+exports.default = GUI;
 
 
-}); if (_gsScope._gsDefine) { _gsScope._gsQueue.pop()(); }
-
-//export to AMD/RequireJS and CommonJS/Node (precursor to full modular build system coming at a later date)
-(function(name) {
-	"use strict";
-	var getGlobal = function() {
-		return (_gsScope.GreenSockGlobals || _gsScope)[name];
-	};
-	if (typeof(define) === "function" && define.amd) { //AMD
-		define(["TweenLite"], getGlobal);
-	} else if (typeof(module) !== "undefined" && module.exports) { //node
-		require('gsap');
-		module.exports = getGlobal();
+function __range__(left, right, inclusive) {
+	var range = [];
+	var ascending = left < right;
+	var end = !inclusive ? right : ascending ? right + 1 : right - 1;
+	for (var i = left; ascending ? i < end : i > end; ascending ? i++ : i--) {
+		range.push(i);
 	}
-}("Draggable"));
+	return range;
+}
 
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"./gui/Outcome":10,"./gui/Spectrum":12,"./gui/Track":13,"./gui/colors":14,"dat-gui":15}],4:[function(require,module,exports){
+"use strict";
 
-},{"gsap":14}],11:[function(require,module,exports){
+Object.defineProperty(exports, "__esModule", {
+	value: true
+});
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+var Interface = function () {
+	function Interface(context, audio, parameters) {
+		_classCallCheck(this, Interface);
+
+		this.getSpectrum = this.getSpectrum.bind(this);
+		this.computeBPM = this.computeBPM.bind(this);
+		this.update = this.update.bind(this);
+		this.context = context;
+		this.keys = [];
+		this.modulators = [];
+		this.phases = [];
+
+		//# Add a default first phase
+		this.phases[0] = new BEATS.Phase(0);
+
+		//# Initialize sequencer position
+		this.position = 0;
+
+		//# Create audio source node
+		this.input = this.context.createMediaElementSource(audio);
+		console.log(this.input.mediaElement);
+
+		//# Load source to an audio buffer
+		this.loadBuffer(audio.src);
+
+		//# Default analyser
+		this.analyser = this.context.createAnalyser();
+		// @input.channelCount = 1 if parameters.mono
+		this.input.connect(this.analyser);
+
+		this.media = this.input.mediaElement;
+		this.duration = this.media.duration;
+		this.active = true;
+
+		//# Connect the analyser to the destination
+		this.destination = parameters.destination;
+		if (this.destination != null) {
+			//# Connect analyser to the audio context destination
+			this.analyser.connect(this.destination);
+
+			//# Set the analyser as output
+			this.output = this.analyser;
+		}
+
+		if (parameters.fftSize) {
+			this.analyser.fftSize = parameters.fftSize;
+		}
+
+		if (parameters.smoothingTimeConstant) {
+			this.analyser.smoothingTimeConstant = parameters.smoothingTimeConstant;
+		}
+
+		//# Create typed array to store data
+		this.analyser.frequencyData = new Uint8Array(this.analyser.frequencyBinCount);
+		this.analyser.timeDomainData = new Uint8Array(this.analyser.frequencyBinCount);
+
+		//# Create typed array to store normalized data
+		this.analyser.normalizedFrequencyData = new Float32Array(this.analyser.frequencyBinCount);
+		this.analyser.normalizedTimeDomainData = new Float32Array(this.analyser.frequencyBinCount);
+
+		//# Restrict level counts
+		if (parameters.levelCount != null) {
+			this.setLevelCount(parameters.levelCount);
+		}
+
+		//# Update the default analyser once on start
+		this.getSpectrum(this.analyser, true);
+		this.getWaveform(this.analyser, true);
+
+		this.onLoading = parameters.onLoading;
+		this.onProcessEnd = parameters.onProcessEnd;
+	}
+
+	_createClass(Interface, [{
+		key: "setLevelCount",
+		value: function setLevelCount(levelCount) {
+			//# Create typed array to store data, with a length equal to level count
+			this.levelCount = levelCount;
+			this.levelStep = this.analyser.frequencyBinCount / this.levelCount;
+			return this.analyser.levels = new Float32Array(this.levelCount);
+		}
+	}, {
+		key: "loadBuffer",
+		value: function loadBuffer(url) {
+			var _this = this;
+
+			var request = new XMLHttpRequest();
+			request.open("GET", url, true);
+			request.responseType = "arraybuffer";
+
+			var onSuccess = function onSuccess(buffer) {
+				_this.buffer = buffer;
+
+				// Get the bpm when the array buffer is decoded
+				return _this.computeBPM();
+			};
+
+			var onError = function onError() {
+				throw new Error("Error decoding the file " + error);
+			};
+
+			request.onload = function () {
+				//# If the request succeed then decode audio data
+				return _this.context.decodeAudioData(request.response, onSuccess, onError);
+			};
+
+			request.onprogress = function (event) {
+				return __guardFunc__(_this.onLoading, function (f) {
+					return f(event.loaded / event.total);
+				});
+			};
+
+			request.onerror = function (error) {
+				throw new Error("Error loading the file" + error);
+			};
+
+			return request.send();
+		}
+	}, {
+		key: "getSpectrum",
+		value: function getSpectrum(analyser, normalized) {
+			//# Get raw data
+			analyser.getByteFrequencyData(analyser.frequencyData);
+			var spectrum = analyser.frequencyData;
+
+			//# Compute normalized values
+			if (normalized) {
+				var i = analyser.frequencyData.length;
+				while (i--) {
+					analyser.normalizedFrequencyData[i] = analyser.frequencyData[i] / 256;
+				}
+
+				spectrum = analyser.normalizedFrequencyData;
+			}
+
+			//# Compute sampled values
+			if (this.levelCount != null) {
+				var i = this.levelCount;
+				while (i--) {
+
+					var start = i * this.levelStep;
+					var end = (i + 1) * this.levelStep - 1;
+
+					analyser.levels[i] = this.getFrequency(spectrum, start, end);
+				}
+
+				spectrum = analyser.levels;
+			}
+
+			analyser.spectrum = spectrum;
+			return spectrum;
+		}
+	}, {
+		key: "getWaveform",
+		value: function getWaveform(analyser, normalized) {
+			//# Get raw data
+			analyser.getByteTimeDomainData(analyser.timeDomainData);
+			var waveform = analyser.timeDomainData;
+
+			//# Compute normalized values
+			if (normalized) {
+				var i = analyser.timeDomainData.length;
+				while (i--) {
+					analyser.normalizedTimeDomainData[i] = (analyser.timeDomainData[i] - 128) / 128;
+				}
+
+				waveform = analyser.normalizedTimeDomainData;
+			}
+
+			analyser.waveform = waveform;
+			return waveform;
+		}
+	}, {
+		key: "getFrequency",
+		value: function getFrequency(spectrum, start, end) {
+			//# Get the average frequency between start and end
+			if (end - start > 1) {
+				//# Sum up selected frequencies
+				var sum = 0;
+				var iterable = __range__(start, end, true);
+				for (var j = 0; j < iterable.length; j++) {
+					var i = iterable[j];
+					sum += spectrum[i];
+				}
+
+				//# Divide by length
+				return sum / (end - start + 1);
+			} else {
+				return spectrum[start];
+			}
+		}
+	}, {
+		key: "getMaxFrequency",
+		value: function getMaxFrequency(spectrum, start, end) {
+			var max = 0;
+			if (end == null) {
+				end = start;
+			}
+
+			var iterable = __range__(start, end, true);
+			for (var j = 0; j < iterable.length; j++) {
+				var i = iterable[j];
+				if (spectrum[i] > max) {
+					max = spectrum[i];
+				}
+			}
+
+			return max;
+		}
+	}, {
+		key: "computeBPM",
+		value: function computeBPM() {
+			var _this2 = this;
+
+			this.BPMProcessor = new BEATS.BPMProcessor(this.buffer);
+			this.BPMProcessor.onProcessEnd = function (result) {
+				_this2.bpm = result;
+				return _this2.onProcessEnd() != null;
+			};
+
+			return this.BPMProcessor.start();
+		}
+	}, {
+		key: "add",
+		value: function add(object) {
+			if (object instanceof BEATS.Modulator) {
+				if (object.name == null) {
+					modulator.name = "M|" + this.modulators.length;
+				}
+
+				//# The context is needed to create a filter and an analyser
+				object.context = this.context;
+				object.set();
+
+				//# Create a typed array to receive normalized data
+				object.analyser.levels = new Float32Array(this.levelCount);
+
+				//# Update the modulator analyser once when added
+				this.getSpectrum(object.analyser, true);
+				this.getWaveform(object.analyser, true);
+
+				this.input.connect(object.filter);
+
+				//# Add modulator to the interface
+				this.modulators[this.modulators.length++] = object;
+			}
+
+			if (object instanceof BEATS.Key) {
+				if (object.name == null) {
+					object.name = "K|" + this.keys.length;
+				}
+				object.index = this.keys.length;
+
+				//# Add key to the interface
+				this.keys[this.keys.length++] = object;
+			}
+
+			if (object instanceof BEATS.Phase) {
+				//# Add phase to the interface
+				this.phases[this.phases.length++] = object;
+
+				//# Sort phases according to their time
+				this.phases.sort(function (a, b) {
+					if (a.time > b.time) {
+						return 1;
+					}
+					if (a.time < b.time) {
+						return -1;
+					}
+
+					return 0;
+				});
+
+				object.keys = this.keys;
+				object.modulators = this.modulators;
+				object.phases = this.phases;
+
+				var i = this.phases.length;
+				while (i--) {
+					this.phases[i].index = i;
+				}
+			}
+
+			//# Set the first phase which contains the original values of the keys and modulators
+			this.phases[0].keys = this.keys;
+			this.phases[0].modulators = this.modulators;
+			this.phases[0].phases = this.phases;
+
+			var i = this.keys.length;
+			while (i--) {
+				var key = this.keys[i];
+				var values = this.phases[0].values[key.name] = {};
+
+				for (var name in key) {
+					var value = key[name];
+					if (typeof value !== "function") {
+						values[name] = value;
+					}
+				}
+			}
+
+			i = this.modulators.length;
+			while (i--) {
+				var modulator = this.modulators[i];
+				var values = this.phases[0].values[modulator.name] = {};
+
+				values.active = modulator.active;
+
+				for (var name in modulator.filter) {
+					var parameter = modulator.filter[name];
+					if (name === 'frequency' || name === 'Q' || name === 'gain') {
+						values[name] = parameter.value;
+					}
+				}
+			}
+		}
+	}, {
+		key: "remove",
+		value: function remove(object) {
+			//# Find the object type
+			switch (object.constructor.name) {
+				case 'Modulator':
+					var objects = this.modulators;
+					break;
+				case 'Key':
+					objects = this.keys;
+					break;
+				case 'Sequencer':
+					objects = this.sequencer;
+					break;
+				default:
+
+					throw new Error('Unknown object type');
+					return;
+			}
+
+			//# Find the object according to type
+			var i = objects.length;
+			return function () {
+				var result = [];
+				while (i--) {
+					var item = void 0;
+					if (objects[i] === object) {
+						item = objects.splice(i, 1);
+					}
+					result.push(item);
+				}
+				return result;
+			}();
+		}
+	}, {
+		key: "get",
+		value: function get(name) {
+			//# Get object by name
+			if (typeof name === 'string') {
+				//# Loop through keys
+				var i = this.keys.length;
+				while (i--) {
+					if (this.keys[i].name === name) {
+						return this.keys[i];
+					}
+				}
+
+				//# Loop through modulators
+				i = this.modulators.length;
+				while (i--) {
+					if (this.modulators[i].name === name) {
+						return this.modulators[i];
+					}
+				}
+			} else {
+				throw new Error("Can't find object named : " + name);
+				return;
+			}
+		}
+	}, {
+		key: "update",
+		value: function update() {
+			if (this.media == null || this.media.paused || !this.active) {
+				return;
+			}
+
+			//# Update time and progression
+			this.currentTime = this.media.currentTime;
+			this.progress = this.currentTime / this.duration;
+
+			//# Update main analyser
+			this.getSpectrum(this.analyser, true);
+			this.getWaveform(this.analyser, true);
+
+			//# Update modulators analyser
+			var i = this.modulators.length;
+			while (i--) {
+				var modulator = this.modulators[i];
+				if (!modulator.active) {
+					continue;
+				}
+
+				var _modulator = modulator;
+				var analyser = _modulator.analyser;
+
+
+				this.getSpectrum(analyser, true);
+				this.getWaveform(analyser, true);
+			}
+
+			//# Update keys value
+			i = this.keys.length;
+			while (i--) {
+				var key = this.keys[i];
+				var modulator = null;
+
+				//# Check if the key needs to be modulated
+				if (key.modulator != null) {
+					modulator = this.get(key.modulator);
+				}
+
+				//# Check if the modulator exists and is active
+				if (modulator != null && modulator.active) {
+					var spectrum = modulator.analyser.spectrum;
+
+					//# Else use the default spectrum
+				} else {
+					var spectrum = this.analyser.spectrum;
+				}
+
+				//# Get the average or the maximal frequency according to key type
+				if (key.type === "average") {
+					var frequency = this.getFrequency(spectrum, key.start, key.end);
+				} else if (key.type === "max") {
+					var frequency = this.getMaxFrequency(spectrum, key.start, key.end);
+				}
+
+				key.update(frequency);
+			}
+
+			//# Update sequencer
+			if (this.phases.length > 0) {
+				//# Call current phase update callback
+				__guardFunc__(this.phases[this.position].onUpdate, function (f) {
+					return f();
+				});
+
+				var nextPhase = this.phases[this.position + 1];
+				var nextTime = nextPhase != null ? nextPhase.time : this.duration;
+
+				if (this.currentTime >= nextTime) {
+					//# Call current phase end callback
+					__guardFunc__(this.phases[this.position].onComplete, function (f1) {
+						return f1();
+					});
+
+					//# Return if it is the last phase
+					if (nextPhase == null) {
+						return;
+					}
+
+					//# Update position to switch to next phase
+					this.position++;
+
+					//# Set keys and modulators values for the new phase
+					this.phases[this.position].initialize();
+
+					//# Call new phase start callback
+					__guardFunc__(this.phases[this.position].onStart, function (f2) {
+						return f2();
+					});
+
+					//# Call interface on phase change event
+					return __guardFunc__(this.onPhaseChange, function (f3) {
+						return f3();
+					});
+				}
+			}
+		}
+	}]);
+
+	return Interface;
+}();
+
+exports.default = Interface;
+
+
+function __guardFunc__(func, transform) {
+	return typeof func === 'function' ? transform(func) : undefined;
+}
+function __range__(left, right, inclusive) {
+	var range = [];
+	var ascending = left < right;
+	var end = !inclusive ? right : ascending ? right + 1 : right - 1;
+	for (var i = left; ascending ? i < end : i > end; ascending ? i++ : i--) {
+		range.push(i);
+	}
+	return range;
+}
+
+},{}],5:[function(require,module,exports){
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+	value: true
+});
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+var Key = function () {
+	function Key(start, end, min, max, parameters) {
+		_classCallCheck(this, Key);
+
+		this.update = this.update.bind(this);
+		if (parameters == null) {
+			parameters = {};
+		}
+
+		this.set(start, end, min, max);
+
+		this.value = 0;
+
+		this.smoothness = parameters.smoothness || 1;
+
+		this.delay = parameters.delay;
+		this.timeout = null;
+		this.lower = true;
+
+		this.threshold = parameters.threshold;
+		this.currentThreshold = this.threshold;
+
+		this.type = parameters.type || 'average';
+
+		this.name = parameters.name;
+		this.modulator = parameters.modulator || null;
+		this.active = parameters.active;
+
+		this.callback = parameters.callback || null;
+	}
+
+	_createClass(Key, [{
+		key: 'set',
+		value: function set(start, end, min, max, threshold) {
+			if (start != null) {
+				this.start = start;
+			}
+			if (end != null) {
+				this.end = end;
+			}
+			if (min != null) {
+				this.min = min;
+			}
+			if (max != null) {
+				return this.max = max;
+			}
+		}
+	}, {
+		key: 'update',
+		value: function update(frequency) {
+			var _this = this;
+
+			if (!this.active) {
+				this.value = 0;
+				return;
+			}
+
+			//# Compute value according to parameters
+			var value = (frequency - this.min) / (this.max - this.min);
+
+			//# Constricts value
+			value = Math.min(1, Math.max(0, value));
+
+			if (this.smoothness <= 1) {
+				this.value = value;
+			} else {
+				this.value += (value - this.value) * (1 / this.smoothness);
+			}
+
+			//# Check if a callback sould be called
+			if (!this.threshold) {
+				return;
+			}
+
+			if (this.value >= this.currentThreshold && this.lower) {
+
+				var callback = function callback() {
+					return _this.lower = true;
+				};
+				this.timeout = setTimeout(callback, this.delay);
+				this.lower = false;
+
+				if (this.callback != null) {
+					return this.callback();
+				}
+			}
+		}
+	}]);
+
+	return Key;
+}();
+
+exports.default = Key;
+
+},{}],6:[function(require,module,exports){
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+	value: true
+});
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+var Modulator = function () {
+	function Modulator(type, frequency, parameters) {
+		_classCallCheck(this, Modulator);
+
+		//# Filter property
+		this.type = type;
+		this.frequency = frequency;
+		this.Q = parameters.Q;
+		this.gain = parameters.gain;
+
+		//# Modulator property
+		this.name = parameters.name;
+		this.active = parameters.active;
+	}
+
+	_createClass(Modulator, [{
+		key: "set",
+		value: function set(frequency, Q, gain) {
+			//# Create filter and analyser
+			this.filter = this.context.createBiquadFilter();
+			this.analyser = this.context.createAnalyser();
+			this.filter.connect(this.analyser);
+
+			//# Create typed array to store data
+			this.analyser.frequencyData = new Uint8Array(this.analyser.frequencyBinCount);
+			this.analyser.timeDomainData = new Uint8Array(this.analyser.frequencyBinCount);
+
+			//# Create typed array to store normalized data
+			this.analyser.normalizedFrequencyData = new Float32Array(this.analyser.frequencyBinCount);
+			this.analyser.normalizedTimeDomainData = new Float32Array(this.analyser.frequencyBinCount);
+
+			this.filter.type = this.type;
+			this.filter.frequency.value = this.frequency;
+
+			if (this.filter.Q != null && this.Q != null) {
+				this.filter.Q.value = this.Q;
+			}
+			if (this.filter.gain != null && this.gain != null) {
+				return this.filter.gain.value = this.gain;
+			}
+		}
+	}]);
+
+	return Modulator;
+}();
+
+exports.default = Modulator;
+
+},{}],7:[function(require,module,exports){
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+	value: true
+});
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+var Phase = function () {
+	function Phase(time, values, parameters) {
+		_classCallCheck(this, Phase);
+
+		this.initialize = this.initialize.bind(this);
+		this.time = time;
+		this.values = values;
+		if (this.values == null) {
+			this.values = {};
+		}
+		if (parameters == null) {
+			parameters = {};
+		}
+
+		this.name = parameters.name;
+
+		this.onStart = parameters.onStart;
+		this.onUpdate = parameters.onUpdate;
+		this.onComplete = parameters.onComplete;
+	}
+
+	_createClass(Phase, [{
+		key: 'initialize',
+		value: function initialize() {
+			var _this = this;
+
+			var i = 0;
+			return function () {
+				var result = [];
+				while (i <= _this.index) {
+					for (var name in _this.phases[i].values) {
+						var values = _this.phases[i].values[name];
+						var j = _this.keys.length;
+						while (j--) {
+							if (_this.keys[j].name === name) {
+								var key = _this.keys[j];
+
+								for (var parameter in values) {
+									var value = values[parameter];
+									key[parameter] = value;
+								}
+							}
+						}
+
+						j = _this.modulators.length;
+						while (j--) {
+							if (_this.modulators[j].name === name) {
+								var modulator = _this.modulators[j];
+
+								for (var parameter in values) {
+									var value = values[parameter];
+									if (parameter === 'active') {
+										modulator.active = value;
+									} else {
+										modulator.filter[parameter].value = value;
+									}
+								}
+							}
+						}
+					}
+
+					result.push(i++);
+				}
+				return result;
+			}();
+		}
+	}]);
+
+	return Phase;
+}();
+
+exports.default = Phase;
+
+},{}],8:[function(require,module,exports){
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+	value: true
+});
+exports.default = {
+	getArrayMin: function getArrayMin(data) {
+		var min = Infinity;
+
+		var i = data.length;
+		while (i--) {
+			if (data[i] < min) {
+				min = data[i];
+			}
+		}
+
+		return min;
+	},
+	getArrayMax: function getArrayMax(data) {
+		var max = -Infinity;
+
+		var i = data.length;
+		while (i--) {
+			if (data[i] > max) {
+				max = data[i];
+			}
+		}
+
+		return max;
+	},
+	stereoToMono: function stereoToMono(audioBuffer) {
+
+		var buffer = audioBuffer;
+		if (buffer.numberOfChannels = 2) {
+			//# Get each audio buffer's channel
+			var leftChannel = buffer.getChannelData(0);
+			var rightChannel = buffer.getChannelData(1);
+
+			var i = buffer.length;
+			while (i--) {
+				//# Get the average
+				var mixedChannel = 0.5 * (leftChannel[i] + rightChannel[i]);
+				leftChannel[i] = rightChannel[i] = mixedChannel;
+			}
+
+			buffer.numberOfChannels = 1;
+		}
+
+		return buffer;
+	}
+};
+
+},{}],9:[function(require,module,exports){
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+	value: true
+});
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+var Key = function () {
+	function Key(values, bounds, color, template) {
+		_classCallCheck(this, Key);
+
+		this.resize = this.resize.bind(this);
+		this.values = values;
+		this.bounds = bounds;
+		this.element = template.cloneNode(true);
+		this.element.className = 'key';
+
+		this.element.style.boxShadow = '0 0 0 1px ' + color + ' inset';
+
+		this.name = this.element.querySelector('.name');
+		this.name.innerText = this.values.name;
+
+		this.handle = this.element.querySelector('.handle');
+	}
+
+	_createClass(Key, [{
+		key: 'set',
+		value: function set() {
+			var _this = this;
+
+			var self = this;
+			this.update();
+
+			//# Set draggables for easily change key values
+			Draggable.create(this.element, {
+				bounds: this.bounds,
+				liveSnap: {
+					x: function x(value) {
+						return _this.levelSize * Math.round(value / _this.levelSize);
+					}
+				},
+				onDrag: function onDrag() {
+
+					var difference = self.values.max - self.values.min;
+					self.values.max = 1 - this.y / self.canvasHeight;
+					self.values.min = self.values.max - difference;
+
+					difference = self.values.end - self.values.start;
+					self.values.start = Math.round(this.x / self.levelSize);
+					return self.values.end = self.values.start + difference;
+				}
+			});
+
+			return Draggable.create(this.handle, {
+				bounds: this.bounds,
+				type: 'top, left',
+				onPress: function onPress(event) {
+					return event.stopPropagation();
+				},
+				onDrag: function onDrag(event) {
+					self.values.min = self.values.max - this.y / self.canvasHeight;
+					self.values.end = self.values.start + Math.round(this.x / self.levelSize);
+
+					return TweenLite.set(this.target.parentNode, { width: this.x, height: this.y });
+				},
+
+				liveSnap: {
+					x: function x(value) {
+						return _this.levelSize * Math.round(value / _this.levelSize);
+					}
+				}
+			});
+		}
+	}, {
+		key: 'update',
+		value: function update() {
+			if (this.values.active) {
+				if (!this.element.classList.contains('active')) {
+					this.element.classList.add('active');
+				}
+			} else {
+				this.element.classList.remove('active');
+			}
+
+			var x = this.values.start * this.levelSize;
+			var y = (1 - this.values.max) * this.canvasHeight;
+
+			var width = (this.values.end - this.values.start) * this.levelSize;
+			var height = (this.values.max - this.values.min) * this.canvasHeight;
+
+			this.element.style.height = height + 'px';
+			this.element.style.width = width + 'px';
+
+			return this.element.style.transform = 'translate3d( ' + x + 'px,' + y + 'px, 0px )';
+		}
+	}, {
+		key: 'resize',
+		value: function resize(levelSize, canvasHeight) {
+			this.levelSize = levelSize;
+			this.canvasHeight = canvasHeight;
+			this.update();
+
+			return this.set();
+		}
+	}]);
+
+	return Key;
+}();
+
+exports.default = Key;
+
+},{}],10:[function(require,module,exports){
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+	value: true
+});
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+var _colors = require('./colors');
+
+var _colors2 = _interopRequireDefault(_colors);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+var Outcome = function () {
+	function Outcome(beats) {
+		var _this = this;
+
+		_classCallCheck(this, Outcome);
+
+		this.highlightCallback = this.highlightCallback.bind(this);
+		this.toggle = this.toggle.bind(this);
+		this.draw = this.draw.bind(this);
+		this.beats = beats;
+		this.container = document.querySelector('.graph-keys');
+		this.graphControls = this.container.querySelector('.graph-keys-controls');
+		this.grid = this.container.querySelector('.grid');
+		this.canvas = this.container.querySelector('canvas');
+		this.context = this.canvas.getContext('2d');
+
+		//# Show player controls
+		this.controls = document.querySelector('.controls');
+		this.media = this.beats.input.mediaElement;
+		this.media.className = 'audio';
+		this.controls.appendChild(this.media);
+
+		this.bpm = document.createElement('div');
+		this.bpm.className = 'bpm';
+		this.controls.appendChild(this.bpm);
+
+		//# Draw output container
+		this.outputs = [];
+		this.values = [];
+		this.levels = [];
+		this.thresholds = [];
+		this.callbacks = [];
+		this.circles = [];
+
+		var keyTemplate = this.controls.querySelector('.template');
+		var buttonTemplate = this.graphControls.querySelector('.template');
+
+		this.keys = this.beats.keys;
+		this.buttons = [];
+
+		this.datas = [];
+
+		var iterable = __range__(0, this.keys.length, false);
+		for (var k = 0; k < iterable.length; k++) {
+			var i = iterable[k];
+			var output = keyTemplate.cloneNode(true);
+			output.className = 'output';
+
+			var name = output.querySelector('.name');
+			name.style.color = _colors2.default[i];
+			name.innerText = this.keys[i].name;
+			this.controls.appendChild(output);
+
+			this.outputs[this.outputs.length++] = output;
+			this.values[this.values.length++] = output.querySelector('.value');
+			this.thresholds[this.thresholds.length++] = output.querySelector('.threshold');
+			this.callbacks[this.callbacks.length++] = output.querySelector('.callback');
+			this.circles[this.circles.length++] = output.querySelector('.circle');
+
+			var level = this.levels[this.levels.length++] = output.querySelector('.level');
+
+			var button = document.createElement('div');
+			button.innerText = this.keys[i].name;
+			button.style.color = _colors2.default[i];
+
+			button.className = 'button-graph button';
+			if (this.keys[i].active) {
+				button.classList.add('active');
+			}
+
+			this.graphControls.appendChild(button);
+
+			button.addEventListener('click', this.toggle);
+			this.buttons[i] = button;
+
+			this.datas[i] = [];
+		}
+
+		this.keys.forEach(function (key, index) {
+			return key.callback = function () {
+				return _this.highlightCallback(key);
+			};
+		});
+
+		//# Draw grid
+		var grid = this.container.querySelector('.grid');
+		var linesCount = 10;
+
+		var iterable1 = __range__(0, linesCount, true);
+		for (var i1 = 0; i1 < iterable1.length; i1++) {
+			var j = iterable1[i1];
+			var line = document.createElement('div');
+
+			if (j % 5 === 0) {
+				line.className = "line h half";
+			} else {
+				line.className = "line h";
+			}
+
+			line.style.top = 100 / linesCount * j + "%";
+			grid.appendChild(line);
+		}
+	}
+
+	_createClass(Outcome, [{
+		key: 'highlightCallback',
+		value: function highlightCallback(key) {
+			var _this2 = this;
+
+			var callback = this.callbacks[key.index];
+			this.setCallbackStyle(callback, _colors2.default[key.index], 1);
+			return setTimeout(function () {
+				return _this2.setCallbackStyle(callback, '#ffffff', 0.5);
+			}, 250);
+		}
+	}, {
+		key: 'setCallbackStyle',
+		value: function setCallbackStyle(callback, color, opacity) {
+			callback.style.opacity = opacity;
+			return callback.style.color = color;
+		}
+	}, {
+		key: 'toggle',
+		value: function toggle(event) {
+			event.currentTarget.classList.toggle('active');
+			return this.update();
+		}
+	}, {
+		key: 'update',
+		value: function update() {
+			var _this3 = this;
+
+			this.context.clearRect(0, 0, this.width, this.canvas.height);
+
+			if (!this.initialize) {
+
+				this.bpm.textContent = this.beats.bpm + ' BPM';
+				this.initialize = true;
+			}
+
+			//# Update keys
+			var i = this.beats.keys.length;
+			return function () {
+				var result = [];
+				while (i--) {
+					var item = void 0;
+					var key = _this3.beats.keys[i];
+					_this3.values[i].innerText = key.value.toFixed(3);
+
+					if (key.threshold != null) {
+
+						_this3.thresholds[i].style.height = 100 * key.currentThreshold + "%";
+						_this3.thresholds[i].style.display = "block";
+
+						_this3.callbacks[i].style.top = 100 - 100 * key.currentThreshold + "%";
+						_this3.callbacks[i].style.display = "block";
+					} else {
+
+						_this3.thresholds[i].style.display = "none";
+						_this3.callbacks[i].style.display = "none";
+					}
+
+					if (key.active) {
+
+						_this3.outputs[i].style.opacity = 1.0;
+						_this3.levels[i].style.height = 100 * key.value + "%";
+						_this3.circles[i].style.transform = 'scale(' + key.value + ')';
+					} else {
+						_this3.outputs[i].style.opacity = 0.2;
+					}
+
+					if (_this3.datas[i].length >= _this3.waveCountKeys) {
+						_this3.datas[i].shift();
+					}
+					_this3.datas[i][_this3.datas[i].length++] = key.value;
+
+					if (_this3.buttons[i].classList.contains('active')) {
+						item = _this3.draw(key, _this3.datas[i], _colors2.default[i]);
+					}
+					result.push(item);
+				}
+				return result;
+			}();
+		}
+	}, {
+		key: 'draw',
+		value: function draw(key, datas, color) {
+			//# Update graph
+			this.context.strokeStyle = color;
+
+			this.context.beginPath();
+			this.context.setLineDash([]);
+
+			var iterable = __range__(0, this.waveCountKeys, false);
+			for (var j = 0; j < iterable.length; j++) {
+				var i = iterable[j];
+				var y = -datas[i] * this.height + this.height;
+				this.context.lineTo(i * this.waveSizeKeys, y);
+			}
+
+			this.context.stroke();
+
+			if (key.threshold == null) {
+				return;
+			}
+
+			//# Threshold
+			this.context.beginPath();
+			this.context.strokeStyle = color;
+
+			var y = -key.threshold * this.height + this.height;
+			this.context.setLineDash([5, 5]);
+			this.context.moveTo(0, y);
+			this.context.lineTo(this.width, y);
+			return this.context.stroke();
+		}
+	}, {
+		key: 'resize',
+		value: function resize() {
+			this.width = this.canvas.width = this.canvas.parentNode.clientWidth;
+			this.height = this.canvas.height = this.grid.clientHeight;
+
+			this.waveCountKeys = 300;
+			return this.waveSizeKeys = this.width / this.waveCountKeys;
+		}
+	}]);
+
+	return Outcome;
+}();
+
+exports.default = Outcome;
+
+
+function __range__(left, right, inclusive) {
+	var range = [];
+	var ascending = left < right;
+	var end = !inclusive ? right : ascending ? right + 1 : right - 1;
+	for (var i = left; ascending ? i < end : i > end; ascending ? i++ : i--) {
+		range.push(i);
+	}
+	return range;
+}
+
+},{"./colors":14}],11:[function(require,module,exports){
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+	value: true
+});
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+var Phase = function () {
+	function Phase(values, mediaDuration, track, template) {
+		var _this = this;
+
+		_classCallCheck(this, Phase);
+
+		this.onDrag = this.onDrag.bind(this);
+		this.set = this.set.bind(this);
+		this.resize = this.resize.bind(this);
+		this.values = values;
+		this.mediaDuration = mediaDuration;
+		this.track = track;
+		this.element = template.cloneNode(true);
+		this.element.className = "sequence";
+
+		this.text = this.element.querySelector('.value');
+
+		var self = this;
+		this.draggable = new Draggable(this.element, {
+			bounds: this.track.sequences,
+			type: 'x',
+			lockAxis: true,
+			cursor: 'ew-resize',
+
+			onPress: function onPress() {
+				return _this.track.dragged = true;
+			},
+			onRelease: function onRelease() {
+				return _this.track.dragged = false;
+			},
+
+			onDrag: function onDrag() {
+				return self.onDrag(this.x);
+			}
+		});
+	}
+
+	_createClass(Phase, [{
+		key: 'onDrag',
+		value: function onDrag(x) {
+			var time = x / this.canvasWidth * this.mediaDuration;
+			time = Math.round(time * 1000) * 0.001;
+			this.text.textContent = time.toFixed(3);
+
+			return this.values.time = time;
+		}
+	}, {
+		key: 'set',
+		value: function set() {
+			TweenMax.set(this.element, { x: this.values.time / this.mediaDuration * this.canvasWidth });
+			this.text.textContent = this.values.time.toFixed(3);
+
+			return __guard__(this.draggable, function (x) {
+				return x.update();
+			});
+		}
+	}, {
+		key: 'resize',
+		value: function resize(canvasWidth) {
+			this.canvasWidth = canvasWidth;
+			return this.set();
+		}
+	}]);
+
+	return Phase;
+}();
+
+exports.default = Phase;
+
+
+function __guard__(value, transform) {
+	return typeof value !== 'undefined' && value !== null ? transform(value) : undefined;
+}
+
+},{}],12:[function(require,module,exports){
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+	value: true
+});
+
+var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol ? "symbol" : typeof obj; };
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+var _gsap = require('gsap');
+
+var _gsap2 = _interopRequireDefault(_gsap);
+
+var _Key = require('./Key');
+
+var _Key2 = _interopRequireDefault(_Key);
+
+var _colors = require('./colors');
+
+var _colors2 = _interopRequireDefault(_colors);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+var Spectrum = function () {
+	function Spectrum(beats, changeOutput) {
+		var _this = this;
+
+		_classCallCheck(this, Spectrum);
+
+		this.getAnalyser = this.getAnalyser.bind(this);
+		this.beats = beats;
+		this.changeOutput = changeOutput;
+		this.container = document.querySelector('.graph-spectrum');
+		this.graphControls = this.container.querySelector('.graph-spectrum-controls');
+		this.grid = this.container.querySelector('.grid');
+		this.canvas = this.container.querySelector('canvas');
+		this.context = this.canvas.getContext('2d');
+
+		this.buttons = [this.graphControls.querySelector('.active')];
+		this.current = this.buttons[0];
+
+		//# Add control to show waveform or not
+		var button = this.container.querySelector('.button-waveform');
+		this.showWaveform = false;
+
+		if (this.showWaveform) {
+			button.classList.add('active');
+		}
+
+		button.addEventListener('click', function (event) {
+
+			if (event.target.classList.contains('active')) {
+
+				_this.showWaveform = false;
+				return event.target.classList.remove('active');
+			} else {
+
+				_this.showWaveform = true;
+				return event.target.classList.add('active');
+			}
+		});
+
+		//# Draw keys
+		this.keys = [];
+		var template = this.container.querySelector('.template');
+
+		var iterable = __range__(0, this.beats.keys.length, false);
+		for (var j = 0; j < iterable.length; j++) {
+
+			var i = iterable[j];
+			this.keys[i] = new _Key2.default(this.beats.keys[i], this.grid, _colors2.default[i], template);
+			this.grid.appendChild(this.keys[i].element);
+		}
+
+		var iterable1 = __range__(0, this.beats.modulators.length, false);
+		for (var k = 0; k < iterable1.length; k++) {
+
+			var i = iterable1[k];
+			button = document.createElement('div');
+			button.textContent = this.beats.modulators[i].name;
+
+			button.className = 'button-graph button';
+			this.graphControls.appendChild(button);
+
+			this.buttons[i + 1] = button;
+		}
+
+		var i = this.buttons.length;
+		while (i--) {
+			this.buttons[i].addEventListener('click', this.getAnalyser);
+		}
+
+		//# Draw horizontal lines
+		var linesCount = 20;
+		var iterable2 = __range__(0, linesCount, true);
+		for (var i1 = 0; i1 < iterable2.length; i1++) {
+
+			i = iterable2[i1];
+			var line = document.createElement('div');
+
+			if (i % 10 === 0) {
+				line.className = "line h half";
+			} else {
+				line.className = "line h ";
+			}
+
+			line.style.top = 100 / linesCount * i + "%";
+			this.grid.appendChild(line);
+		}
+
+		//# Store vertical lines to position them on resize
+		this.lines = [];
+
+		//# Draw vertical lines
+		var iterable3 = __range__(0, this.beats.levelCount, true);
+		for (var j1 = 0; j1 < iterable3.length; j1++) {
+
+			i = iterable3[j1];
+			var line = document.createElement('div');
+			line.className = "line v";
+
+			this.lines[this.lines.length++] = line;
+			this.grid.appendChild(line);
+		}
+	}
+
+	_createClass(Spectrum, [{
+		key: 'getAnalyser',
+		value: function getAnalyser(event) {
+			var _this2 = this;
+
+			__guard__(this.current, function (x) {
+				return x.classList.remove('active');
+			});
+
+			this.current = event.currentTarget;
+			var name = this.current.textContent;
+
+			this.current.classList.add('active');
+
+			var modulator = this.beats.get(name);
+			if (name === 'main') {
+				var output = this.beats.analyser;
+			} else {
+				var output = modulator.analyser;
+			}
+
+			this.changeOutput(output);
+
+			//# Get filter response
+			this.frequencyHz = null;
+			this.magnitude = null;
+			this.phase = null;
+
+			if (modulator != null) {
+				var _ret = function () {
+
+					_this2.filter = modulator.filter;
+
+					_this2.frequencyBars = 1000;
+
+					_this2.frequencies = new Float32Array(_this2.frequencyBars);
+					_this2.magnitude = new Float32Array(_this2.frequencyBars);
+					_this2.phase = new Float32Array(_this2.frequencyBars);
+
+					var i = _this2.frequencyBars;
+					return {
+						v: function () {
+							var result = [];
+							while (i--) {
+								result.push(_this2.frequencies[i] = 2000 / _this2.frequencyBars * (i + 1));
+							}
+							return result;
+						}()
+					};
+				}();
+
+				if ((typeof _ret === 'undefined' ? 'undefined' : _typeof(_ret)) === "object") return _ret.v;
+			}
+		}
+	}, {
+		key: 'update',
+		value: function update(output) {
+			var _this3 = this;
+
+			this.context.clearRect(0, 0, this.width, this.height);
+
+			//# Draw spectrum
+			var i = this.levelCount;
+			while (i--) {
+
+				this.context.fillStyle = 'rgba( 255, 255, 255, 0.15 )';
+
+				if (output.spectrum[i] > 0) {
+
+					var x = i * this.levelSize;
+					var height = output.spectrum[i] * this.height;
+					var width = this.levelSize;
+
+					var y = this.height - height;
+					this.context.fillRect(x, y, width, height);
+				}
+			}
+
+			if (this.magnitude != null) {
+
+				this.filter.getFrequencyResponse(this.frequencies, this.magnitude, this.phase);
+
+				//# Draw magnitude
+				var barWidth = this.width / this.frequencyBars;
+
+				this.context.strokeStyle = 'rgba( 255, 255, 255, 0.8 )';
+				this.context.beginPath();
+				this.context.setLineDash([2, 2]);
+
+				var step = 0;
+				while (step < this.frequencyBars) {
+					this.context.lineTo(step * barWidth, this.height - this.magnitude[step] * 90);
+					step++;
+				}
+
+				this.context.stroke();
+
+				//# Draw phase
+
+				this.context.strokeStyle = 'rgba( 255, 255, 255, 0.2 )';
+				this.context.beginPath();
+
+				step = 0;
+				while (step < this.frequencyBars) {
+					this.context.lineTo(step * barWidth, this.height - (this.phase[step] * 90 + 300) / Math.PI);
+					step++;
+				}
+
+				this.context.stroke();
+				this.context.setLineDash([]);
+			}
+
+			//# Set waveform opacity to 0 to hide it
+			if (this.showWaveform) {
+
+				//# Draw waveform
+				this.context.strokeStyle = "rgba( 200, 200, 200, 0.95 )";
+				this.context.beginPath();
+
+				i = this.waveCount;
+				while (i--) {
+
+					var height = output.waveform[i] * this.height * 0.5 + this.height * 0.5;
+					this.context.lineTo(i * this.waveSize, height);
+				}
+
+				this.context.stroke();
+			}
+
+			//# Resize keys
+			i = this.keys.length;
+			return function () {
+				var result = [];
+				while (i--) {
+					result.push(_this3.keys[i].update());
+				}
+				return result;
+			}();
+		}
+	}, {
+		key: 'resize',
+		value: function resize() {
+			var _this4 = this;
+
+			this.width = this.canvas.width = this.container.clientWidth;
+			this.height = this.canvas.height = 300;
+
+			//# Get level size according to the level count
+			this.levelCount = this.beats.levelCount || this.beats.analyser.frequencyData.length;
+			this.levelSize = this.width / this.levelCount;
+
+			//# Get wave size according to the wave count
+			this.waveCount = this.beats.analyser.timeDomainData.length;
+			this.waveSize = this.width / this.waveCount;
+
+			//# Position lines
+			var i = this.lines.length;
+			while (i--) {
+				this.lines[i].style.left = this.levelSize * i + "px";
+			}
+
+			//# Resize keys
+			i = this.keys.length;
+			return function () {
+				var result = [];
+				while (i--) {
+					result.push(_this4.keys[i].resize(_this4.levelSize, _this4.height));
+				}
+				return result;
+			}();
+		}
+	}]);
+
+	return Spectrum;
+}();
+
+exports.default = Spectrum;
+;
+
+function __range__(left, right, inclusive) {
+	var range = [];
+	var ascending = left < right;
+	var end = !inclusive ? right : ascending ? right + 1 : right - 1;
+	for (var i = left; ascending ? i < end : i > end; ascending ? i++ : i--) {
+		range.push(i);
+	}
+	return range;
+}
+function __guard__(value, transform) {
+	return typeof value !== 'undefined' && value !== null ? transform(value) : undefined;
+}
+
+},{"./Key":9,"./colors":14,"gsap":18}],13:[function(require,module,exports){
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+	value: true
+});
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+var _Phase = require('./Phase');
+
+var _Phase2 = _interopRequireDefault(_Phase);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+var Track = function () {
+	function Track(beats) {
+		_classCallCheck(this, Track);
+
+		this.set = this.set.bind(this);
+		this.draw = this.draw.bind(this);
+		this.onScroll = this.onScroll.bind(this);
+		this.addListener = this.addListener.bind(this);
+		this.removeListener = this.removeListener.bind(this);
+		this.moveTo = this.moveTo.bind(this);
+		this.beats = beats;
+		this.container = document.querySelector('.track');
+		this.name = this.container.querySelector('.container-name');
+		this.progress = document.querySelector('.progress');
+		this.time = this.progress.querySelector('.time');
+
+		this.nodes = [];
+		this.values = [];
+
+		//# if scale = 1 then canvas width = container width
+		this.scale = 3;
+
+		this.canvas = this.container.querySelector('canvas');
+		this.context = this.canvas.getContext('2d');
+
+		this.container.addEventListener('mousedown', this.addListener);
+
+		this.sequences = this.container.querySelector('.sequences');
+		var template = this.container.querySelector('.template');
+
+		//# Draw Phase
+		this.phases = [];
+		var iterable = __range__(0, this.beats.phases.length, false);
+		for (var j = 0; j < iterable.length; j++) {
+			var i = iterable[j];
+			this.phases[i] = new _Phase2.default(this.beats.phases[i], this.beats.media.duration, this, template);
+			this.sequences.appendChild(this.phases[i].element);
+		}
+
+		this.sequences.addEventListener('scroll', this.onScroll);
+		this.onScroll();
+	}
+
+	_createClass(Track, [{
+		key: 'set',
+		value: function set() {}
+	}, {
+		key: 'resample',
+		value: function resample(width, audioData) {
+			// http://stackoverflow.com/questions/22073716/create-a-waveform-of-the-full-track-with-web-audio-api
+			var j = void 0;
+			var resampled = new Float64Array(width * 6);
+
+			var i = j = 0;
+			var buckIndex = 0;
+
+			var min = 1e6;
+			var max = -1e6;
+			var value = 0;
+			var res = 0;
+
+			var sampleCount = audioData.length;
+
+			//# First pass for mean
+			i = 0;
+			while (i < sampleCount) {
+				//# In which bucket do we fall ?
+				buckIndex = 0 | width * i / sampleCount;
+				buckIndex *= 6;
+
+				//# Positive or negative ?
+				value = audioData[i];
+				if (value > 0) {
+					resampled[buckIndex] += value;
+					resampled[buckIndex + 1] += 1;
+				} else if (value < 0) {
+					resampled[buckIndex + 3] += value;
+					resampled[buckIndex + 4] += 1;
+				}
+
+				if (value < min) {
+					min = value;
+				}
+				if (value > max) {
+					max = value;
+				}
+
+				i++;
+			}
+
+			//# Compute mean now
+			i = j = 0;
+			while (i < width) {
+				if (resampled[j + 1] !== 0) {
+					resampled[j] /= resampled[j + 1];
+				}
+
+				if (resampled[j + 4] !== 0) {
+					resampled[j + 3] /= resampled[j + 4];
+				}
+
+				i++;
+				j += 6;
+			}
+
+			//# Second pass for mean variation  ( variance is too low)
+			i = 0;
+			while (i < audioData.length) {
+				//# In which bucket do we fall ?
+				buckIndex = 0 | width * i / audioData.length;
+				buckIndex *= 6;
+
+				//# Positive or negative ?
+				value = audioData[i];
+				if (value > 0) {
+					resampled[buckIndex + 2] += Math.abs(resampled[buckIndex] - value);
+				} else if (value < 0) {
+					resampled[buckIndex + 5] += Math.abs(resampled[buckIndex + 3] - value);
+				}
+
+				i++;
+			}
+
+			//# Compute mean variation / variance now
+			i = j = 0;
+			while (i < width) {
+				if (resampled[j + 1]) {
+					resampled[j + 2] /= resampled[j + 1];
+				}
+
+				if (resampled[j + 4]) {
+					resampled[j + 5] /= resampled[j + 4];
+				}
+
+				i++;
+				j += 6;
+			}
+
+			return resampled;
+		}
+	}, {
+		key: 'draw',
+		value: function draw() {
+			var _this = this;
+
+			// @context.clearRect( 0, 0, @width, @height )
+
+			if (this.beats.buffer == null || this.done) {
+				return;
+			}
+			this.done = true;
+
+			// Draw beat
+			// offset = @width / ( @beats.bpm * ( @beats.duration / 60 ) )
+			// x = 0
+			// while x < @canvasWidth
+
+			// 	x += offset * 8
+
+			// 	beat = document.createElement( 'div' )
+			// 	beat.classList.add( 'beat' )
+			// 	beat.style.left = x + 'px'
+			// 	@sequences.appendChild( beat )
+
+			var span = this.container.querySelector('.container-name span');
+			span.innerText = '';
+
+			var resampledData = this.resample(this.width * this.scale, this.beats.buffer.getChannelData(0));
+
+			this.context.translate(0.5, this.height * 0.5);
+			this.context.scale(1, 100);
+
+			var i = 0;
+			return function () {
+				var result = [];
+				while (i < _this.width * _this.scale) {
+					var j = i * 6;
+
+					// Update from positiveAvg - variance to negativeAvg - variance
+					_this.context.strokeStyle = '#ffffff';
+					_this.context.beginPath();
+					_this.context.moveTo(i, resampledData[j] - resampledData[j + 2]);
+					_this.context.lineTo(i, resampledData[j + 3] + resampledData[j + 5]);
+					_this.context.stroke();
+
+					// Update from positiveAvg - variance to positiveAvg + variance
+					_this.context.beginPath();
+					_this.context.moveTo(i, resampledData[j] - resampledData[j + 2]);
+					_this.context.lineTo(i, resampledData[j] + resampledData[j + 2]);
+					_this.context.stroke();
+
+					// Update from negativeAvg + variance to negativeAvg - variance
+					_this.context.beginPath();
+					_this.context.moveTo(i, resampledData[j + 3] + resampledData[j + 5]);
+					_this.context.lineTo(i, resampledData[j + 3] - resampledData[j + 5]);
+					_this.context.stroke();
+					result.push(i++);
+				}
+				return result;
+			}();
+		}
+	}, {
+		key: 'onScroll',
+		value: function onScroll() {
+			if (this.sequences.scrollLeft <= 10) {
+				this.container.classList.add('hide-left');
+			} else {
+				this.container.classList.remove('hide-left');
+			}
+
+			if (this.sequences.scrollLeft >= this.sequences.scrollWidth - 10) {
+				return this.container.classList.add('hide-right');
+			} else {
+				return this.container.classList.remove('hide-right');
+			}
+		}
+	}, {
+		key: 'addListener',
+		value: function addListener(event) {
+			if (this.dragged) {
+				return;
+			}
+
+			this.moveTo(event);
+
+			this.container.addEventListener('mousemove', this.moveTo);
+			return this.container.addEventListener('mouseup', this.removeListener);
+		}
+	}, {
+		key: 'removeListener',
+		value: function removeListener() {
+			this.container.removeEventListener('mousemove', this.moveTo);
+			return this.container.removeEventListener('mouseup', this.removeListener);
+		}
+	}, {
+		key: 'moveTo',
+		value: function moveTo(event) {
+			var progress = (event.clientX + this.sequences.scrollLeft - this.container.offsetLeft) / this.canvas.clientWidth;
+			this.beats.media.currentTime = progress * this.beats.media.duration;
+
+			var i = this.beats.phases.length;
+			while (i--) {
+
+				var phase = this.beats.phases[i];
+
+				var currentTime = this.beats.media.currentTime;
+
+				var nextPhase = this.beats.phases[i + 1];
+				var nextTime = nextPhase != null ? nextPhase.time : this.beats.duration;
+
+				if (currentTime >= phase.time && currentTime <= nextTime && i !== this.beats.position) {
+
+					this.beats.phases[i].initialize();
+					this.beats.position = i;
+				}
+			}
+
+			if (this.beats.media.paused) {
+				return this.update();
+			}
+		}
+	}, {
+		key: 'update',
+		value: function update() {
+			var value = this.beats.media.currentTime / this.beats.media.duration;
+			this.progress.style.left = value * 100 * this.scale + '%';
+			this.time.innerText = this.beats.media.currentTime.toFixed(3);
+
+			return this.draw();
+		}
+	}, {
+		key: 'resize',
+		value: function resize() {
+			this.width = this.container.clientWidth;
+			this.height = this.container.clientHeight - this.name.offsetHeight;
+
+			this.canvasWidth = this.width * this.scale;
+
+			this.canvas.height = this.height;
+			this.canvas.width = this.canvasWidth;
+
+			var i = this.phases.length;
+			while (i--) {
+				this.phases[i].resize(this.canvasWidth);
+			}
+
+			this.done = false;
+			this.draw();
+
+			this.update();
+			return this.set();
+		}
+	}]);
+
+	return Track;
+}();
+
+exports.default = Track;
+;
+
+function __range__(left, right, inclusive) {
+	var range = [];
+	var ascending = left < right;
+	var end = !inclusive ? right : ascending ? right + 1 : right - 1;
+	for (var i = left; ascending ? i < end : i > end; ascending ? i++ : i--) {
+		range.push(i);
+	}
+	return range;
+}
+
+},{"./Phase":11}],14:[function(require,module,exports){
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+	value: true
+});
+exports.default = ['#1abc9c', '#2ecc71', '#3498db', '#9b59b6', '#f1c40f', '#e67e22', '#e74c3c'];
+
+},{}],15:[function(require,module,exports){
 module.exports = require('./vendor/dat.gui')
 module.exports.color = require('./vendor/dat.color')
-},{"./vendor/dat.color":12,"./vendor/dat.gui":13}],12:[function(require,module,exports){
+},{"./vendor/dat.color":16,"./vendor/dat.gui":17}],16:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -4437,7 +3164,7 @@ dat.color.math = (function () {
 })(),
 dat.color.toString,
 dat.utils.common);
-},{}],13:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -8098,11 +6825,11 @@ dat.dom.CenteredDiv = (function (dom, common) {
 dat.utils.common),
 dat.dom.dom,
 dat.utils.common);
-},{}],14:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 (function (global){
 /*!
- * VERSION: 1.18.5
- * DATE: 2016-05-24
+ * VERSION: 1.19.0
+ * DATE: 2016-07-14
  * UPDATES AND DOCS AT: http://greensock.com
  * 
  * Includes all of the following: TweenLite, TweenMax, TimelineLite, TimelineMax, EasePack, CSSPlugin, RoundPropsPlugin, BezierPlugin, AttrPlugin, DirectionalRotationPlugin
@@ -8132,7 +6859,7 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 					p, val;
 				for (p in alt) {
 					val = alt[p];
-					vars[p] = (typeof(val) === "function") ? val.call(targets[i], i) : val[i % val.length];
+					vars[p] = (typeof(val) === "function") ? val(i, targets[i]) : val[i % val.length];
 				}
 				delete vars.cycle;
 			},
@@ -8152,7 +6879,7 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 			p = TweenMax.prototype = TweenLite.to({}, 0.1, {}),
 			_blankArray = [];
 
-		TweenMax.version = "1.18.5";
+		TweenMax.version = "1.19.0";
 		p.constructor = TweenMax;
 		p.kill()._gc = false;
 		TweenMax.killTweensOf = TweenMax.killDelayedCallsTo = TweenLite.killTweensOf;
@@ -8789,7 +7516,7 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 			},
 			p = TimelineLite.prototype = new SimpleTimeline();
 
-		TimelineLite.version = "1.18.5";
+		TimelineLite.version = "1.19.0";
 		p.constructor = TimelineLite;
 		p.kill()._gc = p._forcingPlayhead = p._hasPause = false;
 
@@ -9514,12 +8241,13 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 			TweenLiteInternals = TweenLite._internals,
 			_lazyTweens = TweenLiteInternals.lazyTweens,
 			_lazyRender = TweenLiteInternals.lazyRender,
+			_globals = _gsScope._gsDefine.globals,
 			_easeNone = new Ease(null, null, 1, 0),
 			p = TimelineMax.prototype = new TimelineLite();
 
 		p.constructor = TimelineMax;
 		p.kill()._gc = false;
-		TimelineMax.version = "1.18.5";
+		TimelineMax.version = "1.19.0";
 
 		p.invalidate = function() {
 			this._yoyo = (this.vars.yoyo === true);
@@ -9558,13 +8286,14 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 		p.tweenTo = function(position, vars) {
 			vars = vars || {};
 			var copy = {ease:_easeNone, useFrames:this.usesFrames(), immediateRender:false},
+				Engine = (vars.repeat && _globals.TweenMax) || TweenLite,
 				duration, p, t;
 			for (p in vars) {
 				copy[p] = vars[p];
 			}
 			copy.time = this._parseTimeOrLabel(position);
 			duration = (Math.abs(Number(copy.time) - this._time) / this._timeScale) || 0.001;
-			t = new TweenLite(this, duration, copy);
+			t = new Engine(this, duration, copy);
 			copy.onStart = function() {
 				t.target.paused(true);
 				if (t.vars.time !== t.target.time() && duration === t.duration()) { //don't make the duration zero - if it's supposed to be zero, don't worry because it's already initting the tween and will complete immediately, effectively making the duration zero anyway. If we make duration zero, the tween won't run at all.
@@ -10310,7 +9039,7 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 			BezierPlugin = _gsScope._gsDefine.plugin({
 					propName: "bezier",
 					priority: -1,
-					version: "1.3.6",
+					version: "1.3.7",
 					API: 2,
 					global:true,
 
@@ -10321,7 +9050,7 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 							vars = {values:vars};
 						}
 						this._func = {};
-						this._round = {};
+						this._mod = {};
 						this._props = [];
 						this._timeRes = (vars.timeResolution == null) ? 6 : parseInt(vars.timeResolution, 10);
 						var values = vars.values || [],
@@ -10374,6 +9103,7 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 								}
 								p = autoRotate[i][2];
 								this._initialRotations[i] = (this._func[p] ? this._func[p].call(this._target) : this._target[p]) || 0;
+								this._overwriteProps.push(p);
 							}
 						}
 						this._startRatio = tween.vars.runBackwards ? 1 : 0; //we determine the starting ratio when the tween inits which is always 0 unless the tween has runBackwards:true (indicating it's a from() tween) in which case it's 1.
@@ -10444,8 +9174,8 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 							p = this._props[i];
 							b = this._beziers[p][curIndex];
 							val = (t * t * b.da + 3 * inv * (t * b.ca + inv * b.ba)) * t + b.a;
-							if (this._round[p]) {
-								val = Math.round(val);
+							if (this._mod[p]) {
+								val = this._mod[p](val, target);
 							}
 							if (func[p]) {
 								target[p](val);
@@ -10480,6 +9210,10 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 									y2 += ((b2.c + (b2.d - b2.c) * t) - y2) * t;
 
 									val = notStart ? Math.atan2(y2 - y1, x2 - x1) * conv + add : this._initialRotations[i];
+
+									if (this._mod[p]) {
+										val = this._mod[p](val, target); //for modProps
+									}
 
 									if (func[p]) {
 										target[p](val);
@@ -10548,18 +9282,21 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 					}
 					data.autoRotate = cssp._target._gsTransform;
 					data.proxy.rotation = data.autoRotate.rotation || 0;
+					cssp._overwriteProps.push("rotation");
 				}
 				plugin._onInitTween(data.proxy, v, cssp._tween);
 				return pt;
 			}});
 		};
 
-		p._roundProps = function(lookup, value) {
+		p._mod = function(lookup) {
 			var op = this._overwriteProps,
-				i = op.length;
+				i = op.length,
+				val;
 			while (--i > -1) {
-				if (lookup[op[i]] || lookup.bezier || lookup.bezierThrough) {
-					this._round[op[i]] = value;
+				val = lookup[op[i]];
+				if (val && typeof(val) === "function") {
+					this._mod[op[i]] = val;
 				}
 			}
 		};
@@ -10576,6 +9313,15 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 						if (a[i] === p) {
 							a.splice(i, 1);
 						}
+					}
+				}
+			}
+			a = this._autoRotate;
+			if (a) {
+				i = a.length;
+				while (--i > -1) {
+					if (lookup[a[i][2]]) {
+						a.splice(i, 1);
 					}
 				}
 			}
@@ -10619,7 +9365,7 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 			p = CSSPlugin.prototype = new TweenPlugin("css");
 
 		p.constructor = CSSPlugin;
-		CSSPlugin.version = "1.18.5";
+		CSSPlugin.version = "1.19.0";
 		CSSPlugin.API = 2;
 		CSSPlugin.defaultTransformPerspective = 0;
 		CSSPlugin.defaultSkewType = "compensated";
@@ -10687,6 +9433,8 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 					console.log(s);
 				}
 			},
+			_target, //when initting a CSSPlugin, we set this variable so that we can access it from within many other functions without having to pass it around as params
+			_index, //when initting a CSSPlugin, we set this variable so that we can access it from within many other functions without having to pass it around as params
 
 			_prefixCSS = "", //the non-camelCase vendor prefix like "-o-", "-moz-", "-ms-", or "-webkit-"
 			_prefix = "", //camelCase vendor prefix like "O", "ms", "Webkit", or "Moz".
@@ -10901,10 +9649,10 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 
 			// @private Parses position-related complex strings like "top left" or "50px 10px" or "70% 20%", etc. which are used for things like transformOrigin or backgroundPosition. Optionally decorates a supplied object (recObj) with the following properties: "ox" (offsetX), "oy" (offsetY), "oxp" (if true, "ox" is a percentage not a pixel value), and "oxy" (if true, "oy" is a percentage not a pixel value)
 			_parsePosition = function(v, recObj) {
-				if (v === "contain" || v === "auto" || v === "auto auto") {
+				if (v === "contain" || v === "auto" || v === "auto auto") { //note: Firefox uses "auto auto" as default whereas Chrome uses "auto".
 					return v + " ";
 				}
-				if (v == null || v === "") { //note: Firefox uses "auto auto" as default whereas Chrome uses "auto".
+				if (v == null || v === "") {
 					v = "0 0";
 				}
 				var a = v.split(" "),
@@ -10947,6 +9695,9 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 			 * @return {number} Amount of change between the beginning and ending values (relative values that have a "+=" or "-=" are recognized)
 			 */
 			_parseChange = function(e, b) {
+				if (typeof(e) === "function") {
+					e = e(_index, _target);
+				}
 				return (typeof(e) === "string" && e.charAt(1) === "=") ? parseInt(e.charAt(0) + "1", 10) * parseFloat(e.substr(2)) : (parseFloat(e) - parseFloat(b)) || 0;
 			},
 
@@ -10957,6 +9708,9 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 			 * @return {number} Parsed value
 			 */
 			_parseVal = function(v, d) {
+				if (typeof(v) === "function") {
+					v = v(_index, _target);
+				}
 				return (v == null) ? d : (typeof(v) === "string" && v.charAt(1) === "=") ? parseInt(v.charAt(0) + "1", 10) * parseFloat(v.substr(2)) + d : parseFloat(v) || 0;
 			},
 
@@ -10971,6 +9725,9 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 			_parseAngle = function(v, d, p, directionalEnd) {
 				var min = 0.000001,
 					cap, split, dif, result, isRelative;
+				if (typeof(v) === "function") {
+					v = v(_index, _target);
+				}
 				if (v == null) {
 					result = d;
 				} else if (typeof(v) === "number") {
@@ -11232,7 +9989,7 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 				};
 			},
 
-			// @private used when other plugins must tween values first, like BezierPlugin or ThrowPropsPlugin, etc. That plugin's setRatio() gets called first so that the values are updated, and then we loop through the MiniPropTweens  which handle copying the values into their appropriate slots so that they can then be applied correctly in the main CSSPlugin setRatio() method. Remember, we typically create a proxy object that has a bunch of uniquely-named properties that we feed to the sub-plugin and it does its magic normally, and then we must interpret those values and apply them to the css because often numbers must get combined/concatenated, suffixes added, etc. to work with css, like boxShadow could have 4 values plus a color.
+			// @private used when other plugins must tween values first, like BezierPlugin or ThrowPropsPlugin, etc. That plugin's setRatio() gets called first so that the values are updated, and then we loop through the MiniPropTweens which handle copying the values into their appropriate slots so that they can then be applied correctly in the main CSSPlugin setRatio() method. Remember, we typically create a proxy object that has a bunch of uniquely-named properties that we feed to the sub-plugin and it does its magic normally, and then we must interpret those values and apply them to the css because often numbers must get combined/concatenated, suffixes added, etc. to work with css, like boxShadow could have 4 values plus a color.
 			_setPluginRatio = _internals._setPluginRatio = function(v) {
 				this.plugin.setRatio(v);
 				var d = this.data,
@@ -11251,7 +10008,7 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 					mpt = mpt._next;
 				}
 				if (d.autoRotate) {
-					d.autoRotate.rotation = proxy.rotation;
+					d.autoRotate.rotation = d.mod ? d.mod(proxy.rotation, this.t) : proxy.rotation; //special case for ModifyPlugin to hook into an auto-rotating bezier
 				}
 				//at the end, we must set the CSSPropTween's "e" (end) value dynamically here because that's what is used in the final setRatio() method. Same for "b" at the beginning.
 				if (v === 1 || v === 0) {
@@ -11428,6 +10185,9 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 			_parseComplex = CSSPlugin.parseComplex = function(t, p, b, e, clrs, dflt, pt, pr, plugin, setRatio) {
 				//DEBUG: _log("parseComplex: "+p+", b: "+b+", e: "+e);
 				b = b || dflt || "";
+				if (typeof(e) === "function") {
+					e = e(_index, _target);
+				}
 				pt = new CSSPropTween(t, p, 0, 0, pt, (setRatio ? 2 : 1), null, false, pr, b, e);
 				e += ""; //ensures it's a string
 				if (clrs && _colorExp.test(e + b)) { //if colors are found, normalize the formatting to rgba() or hsla().
@@ -11633,7 +10393,7 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 			},
 
 			//creates a placeholder special prop for a plugin so that the property gets caught the first time a tween of it is attempted, and at that time it makes the plugin register itself, thus taking over for all future tweens of that property. This allows us to not mandate that things load in a particular order and it also allows us to log() an error that informs the user when they attempt to tween an external plugin-related property without loading its .js file.
-			_registerPluginProp = function(p) {
+			_registerPluginProp = _internals._registerPluginProp = function(p) {
 				if (!_specialProps[p]) {
 					var pluginName = p.charAt(0).toUpperCase() + p.substr(1) + "Plugin";
 					_registerComplexSpecialProp(p, {parser:function(t, e, p, cssp, pt, plugin, vars) {
@@ -12216,11 +10976,13 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 						a12 = Math.sin(angle - skew) * -sy;
 						a22 = Math.cos(angle - skew) * sy;
 						if (skew && t.skewType === "simple") { //by default, we compensate skewing on the other axis to make it look more natural, but you can set the skewType to "simple" to use the uncompensated skewing that CSS does
-							t1 = Math.tan(skew);
+							t1 = Math.tan(skew - t.skewY * _DEG2RAD);
 							t1 = Math.sqrt(1 + t1 * t1);
 							a12 *= t1;
 							a22 *= t1;
 							if (t.skewY) {
+								t1 = Math.tan(t.skewY * _DEG2RAD);
+								t1 = Math.sqrt(1 + t1 * t1);
 								a11 *= t1;
 								a21 *= t1;
 							}
@@ -12275,11 +11037,13 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 						cos = Math.cos(angle);
 						sin = Math.sin(angle);
 						if (t.skewType === "simple") { //by default, we compensate skewing on the other axis to make it look more natural, but you can set the skewType to "simple" to use the uncompensated skewing that CSS does
-							t1 = Math.tan(t.skewX * _DEG2RAD);
+							t1 = Math.tan((t.skewX - t.skewY) * _DEG2RAD);
 							t1 = Math.sqrt(1 + t1 * t1);
 							cos *= t1;
 							sin *= t1;
 							if (t.skewY) {
+								t1 = Math.tan(t.skewY * _DEG2RAD);
+								t1 = Math.sqrt(1 + t1 * t1);
 								a11 *= t1;
 								a21 *= t1;
 							}
@@ -12409,9 +11173,14 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 		p.x = p.y = p.z = p.skewX = p.skewY = p.rotation = p.rotationX = p.rotationY = p.zOrigin = p.xPercent = p.yPercent = p.xOffset = p.yOffset = 0;
 		p.scaleX = p.scaleY = p.scaleZ = 1;
 
-		_registerComplexSpecialProp("transform,scale,scaleX,scaleY,scaleZ,x,y,z,rotation,rotationX,rotationY,rotationZ,skewX,skewY,shortRotation,shortRotationX,shortRotationY,shortRotationZ,transformOrigin,svgOrigin,transformPerspective,directionalRotation,parseTransform,force3D,skewType,xPercent,yPercent,smoothOrigin", {parser:function(t, e, p, cssp, pt, plugin, vars) {
+		_registerComplexSpecialProp("transform,scale,scaleX,scaleY,scaleZ,x,y,z,rotation,rotationX,rotationY,rotationZ,skewX,skewY,shortRotation,shortRotationX,shortRotationY,shortRotationZ,transformOrigin,svgOrigin,transformPerspective,directionalRotation,parseTransform,force3D,skewType,xPercent,yPercent,smoothOrigin", {parser:function(t, e, parsingProp, cssp, pt, plugin, vars) {
 			if (cssp._lastParsedTransform === vars) { return pt; } //only need to parse the transform once, and only if the browser supports it.
 			cssp._lastParsedTransform = vars;
+			var swapFunc;
+			if (typeof(vars[parsingProp]) === "function") { //whatever property triggers the initial parsing might be a function-based value in which case it already got called in parse(), thus we don't want to call it again in here. The most efficient way to avoid this is to temporarily swap the value directly into the vars object, and then after we do all our parsing in this function, we'll swap it back again.
+				swapFunc = vars[parsingProp];
+				vars[parsingProp] = e;
+			}
 			var originalGSTransform = t._gsTransform,
 				style = t.style,
 				min = 0.000001,
@@ -12419,12 +11188,13 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 				v = vars,
 				endRotations = {},
 				transformOriginString = "transformOrigin",
-				m1 = _getTransform(t, _cs, true, vars.parseTransform),
-				m2, copy, orig, has3D, hasChange, dr, x, y, matrix;
+				m1 = _getTransform(t, _cs, true, v.parseTransform),
+				orig = v.transform && ((typeof(v.transform) === "function") ? v.transform(_index, _target) : v.transform),
+				m2, copy, has3D, hasChange, dr, x, y, matrix, p;
 			cssp._transform = m1;
-			if (typeof(v.transform) === "string" && _transformProp) { //for values like transform:"rotate(60deg) scale(0.5, 0.8)"
+			if (orig && typeof(orig) === "string" && _transformProp) { //for values like transform:"rotate(60deg) scale(0.5, 0.8)"
 				copy = _tempDiv.style; //don't use the original target because it might be SVG in which case some browsers don't report computed style correctly.
-				copy[_transformProp] = v.transform;
+				copy[_transformProp] = orig;
 				copy.display = "block"; //if display is "none", the browser often refuses to report the transform properties correctly.
 				copy.position = "absolute";
 				_doc.body.appendChild(_tempDiv);
@@ -12568,6 +11338,9 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 			if (hasChange) {
 				cssp._transformType = (!(m1.svg && _useSVGTransformAttr) && (has3D || this._transformType === 3)) ? 3 : 2; //quicker than calling cssp._enableTransforms();
 			}
+			if (swapFunc) {
+				vars[parsingProp] = swapFunc;
+			}
 			return pt;
 		}, prefix:true});
 
@@ -12659,7 +11432,10 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 			}
 			return this.parseComplex(t.style, bs, es, pt, plugin);
 		}, formatter:_parsePosition});
-		_registerComplexSpecialProp("backgroundSize", {defaultValue:"0 0", formatter:_parsePosition});
+		_registerComplexSpecialProp("backgroundSize", {defaultValue:"0 0", formatter:function(v) {
+			v += ""; //ensure it's a string
+			return _parsePosition(v.indexOf(" ") === -1 ? v + " " + v : v); //if set to something like "100% 100%", Safari typically reports the computed style as just "100%" (no 2nd value), but we should ensure that there are two values, so copy the first one. Otherwise, it'd be interpreted as "100% 0" (wrong).
+		}});
 		_registerComplexSpecialProp("perspective", {defaultValue:"0px", prefix:true});
 		_registerComplexSpecialProp("perspectiveOrigin", {defaultValue:"50% 50%", prefix:true});
 		_registerComplexSpecialProp("transformStyle", {prefix:true});
@@ -12892,13 +11668,14 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 		p._firstPT = p._lastParsedTransform = p._transform = null;
 
 		//gets called when the tween renders for the first time. This kicks everything off, recording start/end values, etc.
-		p._onInitTween = function(target, vars, tween) {
+		p._onInitTween = function(target, vars, tween, index) {
 			if (!target.nodeType) { //css is only for dom elements
 				return false;
 			}
-			this._target = target;
+			this._target = _target = target;
 			this._tween = tween;
 			this._vars = vars;
+			_index = index;
 			_autoRound = vars.autoRound;
 			_hasPriority = false;
 			_suffixMap = vars.suffixMap || CSSPlugin.suffixMap;
@@ -12998,6 +11775,9 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 				p, sp, bn, en, bs, es, bsfx, esfx, isStr, rel;
 			for (p in vars) {
 				es = vars[p]; //ending value string
+				if (typeof(es) === "function") {
+					es = es(_index, _target);
+				}
 				sp = _specialProps[p]; //SpecialProp lookup.
 				if (sp) {
 					pt = sp.parse(target, es, p, this, pt, plugin, vars);
@@ -13230,6 +12010,16 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 			return pt;
 		};
 
+		p._mod = function(lookup) {
+			var pt = this._firstPT;
+			while (pt) {
+				if (typeof(lookup[pt.p]) === "function" && lookup[pt.p] === Math.round) { //only gets called by RoundPropsPlugin (ModifyPlugin manages all the rendering internally for CSSPlugin properties that need modification). Remember, we handle rounding a bit differently in this plugin for performance reasons, leveraging "r" as an indicator that the value should be rounded internally..
+					pt.r = 1;
+				}
+				pt = pt._next;
+			}
+		};
+
 		//we need to make sure that if alpha or autoAlpha is killed, opacity is too. And autoAlpha affects the "visibility" property.
 		p._kill = function(lookup) {
 			var copy = lookup,
@@ -13255,6 +12045,14 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 					this._linkCSSP(pt._next, pt._next._next, xfirst._prev);
 				}
 				this._classNamePT = null;
+			}
+			pt = this._firstPT;
+			while (pt) {
+				if (pt.plugin && pt.plugin !== p && pt.plugin._kill) { //for plugins that are registered with CSSPlugin, we should notify them of the kill.
+					pt.plugin._kill(lookup);
+					p = pt.plugin;
+				}
+				pt = pt._next;
 			}
 			return TweenPlugin.prototype._kill.call(this, copy);
 		};
@@ -13364,7 +12162,7 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 
 		var RoundPropsPlugin = _gsScope._gsDefine.plugin({
 				propName: "roundProps",
-				version: "1.5",
+				version: "1.6.0",
 				priority: -1,
 				API: 2,
 
@@ -13378,7 +12176,7 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 			_roundLinkedList = function(node) {
 				while (node) {
 					if (!node.f && !node.blob) {
-						node.r = 1;
+						node.m = Math.round;
 					}
 					node = node._next;
 				}
@@ -13393,7 +12191,7 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 				rpt = tween._propLookup.roundProps,
 				prop, pt, next;
 			while (--i > -1) {
-				lookup[rp[i]] = 1;
+				lookup[rp[i]] = Math.round;
 			}
 			i = rp.length;
 			while (--i > -1) {
@@ -13402,7 +12200,7 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 				while (pt) {
 					next = pt._next; //record here, because it may get removed
 					if (pt.pg) {
-						pt.t._roundProps(lookup, true);
+						pt.t._mod(lookup);
 					} else if (pt.n === prop) {
 						if (pt.f === 2 && pt.t) { //a blob (text containing multiple numeric values)
 							_roundLinkedList(pt.t._firstPT);
@@ -13428,7 +12226,7 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 		};
 
 		p._add = function(target, p, s, c) {
-			this._addTween(target, p, s, s + c, p, true);
+			this._addTween(target, p, s, s + c, p, Math.round);
 			this._overwriteProps.push(p);
 		};
 
@@ -13454,16 +12252,20 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 		_gsScope._gsDefine.plugin({
 			propName: "attr",
 			API: 2,
-			version: "0.5.0",
+			version: "0.6.0",
 
 			//called when the tween renders for the first time. This is where initial values should be recorded and any setup routines should run.
-			init: function(target, value, tween) {
-				var p;
+			init: function(target, value, tween, index) {
+				var p, end;
 				if (typeof(target.setAttribute) !== "function") {
 					return false;
 				}
 				for (p in value) {
-					this._addTween(target, "setAttribute", target.getAttribute(p) + "", value[p] + "", p, false, p);
+					end = value[p];
+					if (typeof(end) === "function") {
+						end = end(index, target);
+					}
+					this._addTween(target, "setAttribute", target.getAttribute(p) + "", end + "", p, false, p);
 					this._overwriteProps.push(p);
 				}
 				return true;
@@ -13489,11 +12291,11 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
  */
 	_gsScope._gsDefine.plugin({
 		propName: "directionalRotation",
-		version: "0.2.1",
+		version: "0.3.0",
 		API: 2,
 
 		//called when the tween renders for the first time. This is where initial values should be recorded and any setup routines should run.
-		init: function(target, value, tween) {
+		init: function(target, value, tween, index) {
 			if (typeof(value) !== "object") {
 				value = {rotation:value};
 			}
@@ -13503,7 +12305,11 @@ var _gsScope = (typeof(module) !== "undefined" && module.exports && typeof(globa
 				p, v, start, end, dif, split;
 			for (p in value) {
 				if (p !== "useRadians") {
-					split = (value[p] + "").split("_");
+					end = value[p];
+					if (typeof(end) === "function") {
+						end = end(index, target);
+					}
+					split = (end + "").split("_");
 					v = split[0];
 					start = parseFloat( (typeof(target[p]) !== "function") ? target[p] : target[ ((p.indexOf("set") || typeof(target["get" + p.substr(3)]) !== "function") ? p : "get" + p.substr(3)) ]() );
 					end = this.finals[p] = (typeof(v) === "string" && v.charAt(1) === "=") ? start + parseInt(v.charAt(0) + "1", 10) * Number(v.substr(2)) : Number(v) || 0;
@@ -14008,7 +12814,7 @@ if (_gsScope._gsDefine) { _gsScope._gsQueue.pop()(); } //necessary in case Tween
 
 						//exports to multiple environments
 						if (global) {
-							_globals[n] = cl; //provides a way to avoid global namespace pollution. By default, the main classes like TweenLite, Power1, Strong, etc. are added to window unless a GreenSockGlobals is defined. So if you want to have things added to a custom object instead, just do something like window.GreenSockGlobals = {} before loading any GreenSock files. You can even set up an alias like window.GreenSockGlobals = windows.gs = {} so that you can access everything like gs.TweenLite. Also remember that ALL classes are added to the window.com.greensock object (in their respective packages, like com.greensock.easing.Power1, com.greensock.TweenLite, etc.)
+							_globals[n] = _exports[n] = cl; //provides a way to avoid global namespace pollution. By default, the main classes like TweenLite, Power1, Strong, etc. are added to window unless a GreenSockGlobals is defined. So if you want to have things added to a custom object instead, just do something like window.GreenSockGlobals = {} before loading any GreenSock files. You can even set up an alias like window.GreenSockGlobals = windows.gs = {} so that you can access everything like gs.TweenLite. Also remember that ALL classes are added to the window.com.greensock object (in their respective packages, like com.greensock.easing.Power1, com.greensock.TweenLite, etc.)
 							hasModule = (typeof(module) !== "undefined" && module.exports);
 							if (!hasModule && typeof(define) === "function" && define.amd){ //AMD
 								define((window.GreenSockAMDPath ? window.GreenSockAMDPath + "/" : "") + ns.split(".").pop(), [], function() { return cl; });
@@ -14164,6 +12970,9 @@ if (_gsScope._gsDefine) { _gsScope._gsQueue.pop()(); } //necessary in case Tween
 				i, t, listener;
 			if (list) {
 				i = list.length;
+				if (i > 1) {
+					list = list.slice(0); //in case addEventListener() is called from within a listener/callback (otherwise the index could change, resulting in a skip)
+				}
 				t = this._eventTarget;
 				while (--i > -1) {
 					listener = list[i];
@@ -14453,8 +13262,17 @@ if (_gsScope._gsDefine) { _gsScope._gsQueue.pop()(); } //necessary in case Tween
 		};
 
 		p._callback = function(type) {
-			var v = this.vars;
-			v[type].apply(v[type + "Scope"] || v.callbackScope || this, v[type + "Params"] || _blankArray);
+			var v = this.vars,
+				callback = v[type],
+				params = v[type + "Params"],
+				scope = v[type + "Scope"] || v.callbackScope || this,
+				l = params ? params.length : 0;
+			switch (l) { //speed optimization; call() is faster than apply() so use it when there are only a few parameters (which is by far most common). Previously we simply did var v = this.vars; v[type].apply(v[type + "Scope"] || v.callbackScope || this, v[type + "Params"] || _blankArray);
+				case 0: callback.call(scope); break;
+				case 1: callback.call(scope, params[0]); break;
+				case 2: callback.call(scope, params[0], params[1]); break;
+				default: callback.apply(scope, params);
+			}
 		};
 
 //----Animation getters/setters --------------------------------------------------------
@@ -14838,7 +13656,7 @@ if (_gsScope._gsDefine) { _gsScope._gsQueue.pop()(); } //necessary in case Tween
 		p._firstPT = p._targets = p._overwrittenProps = p._startAt = null;
 		p._notifyPluginsOfEnabled = p._lazy = false;
 
-		TweenLite.version = "1.18.5";
+		TweenLite.version = "1.19.0";
 		TweenLite.defaultEase = p._ease = new Ease(null, null, 1, 1);
 		TweenLite.defaultOverwrite = "auto";
 		TweenLite.ticker = _ticker;
@@ -14866,8 +13684,8 @@ if (_gsScope._gsDefine) { _gsScope._gsQueue.pop()(); } //necessary in case Tween
 					val;
 				while (pt) {
 					val = !pt.blob ? pt.c * v + pt.s : v ? this.join("") : this.start;
-					if (pt.r) {
-						val = Math.round(val);
+					if (pt.m) {
+						val = pt.m(val, this._target || pt.t);
 					} else if (val < min) if (val > -min) { //prevents issues with converting very small numbers to strings in the browser
 						val = 0;
 					}
@@ -14900,7 +13718,7 @@ if (_gsScope._gsDefine) { _gsScope._gsQueue.pop()(); } //necessary in case Tween
 				if (pt) {
 					pt._next = null;
 					pt.blob = 1;
-					a._firstPT = pt; //apply last in the linked list (which means inserting it first)
+					a._firstPT = a._applyPT = pt; //apply last in the linked list (which means inserting it first)
 				}
 				l = endNums.length;
 				for (i = 0; i < l; i++) {
@@ -14922,7 +13740,7 @@ if (_gsScope._gsDefine) { _gsScope._gsQueue.pop()(); } //necessary in case Tween
 						}
 						num = parseFloat(startNums[i]);
 						a.push(num);
-						a._firstPT = {_next: a._firstPT, t:a, p: a.length-1, s:num, c:((currentNum.charAt(1) === "=") ? parseInt(currentNum.charAt(0) + "1", 10) * parseFloat(currentNum.substr(2)) : (parseFloat(currentNum) - num)) || 0, f:0, r:(color && color < 4)};
+						a._firstPT = {_next: a._firstPT, t:a, p: a.length-1, s:num, c:((currentNum.charAt(1) === "=") ? parseInt(currentNum.charAt(0) + "1", 10) * parseFloat(currentNum.substr(2)) : (parseFloat(currentNum) - num)) || 0, f:0, m:(color && color < 4) ? Math.round : 0};
 						//note: we don't set _prev because we'll never need to remove individual PropTweens from this list.
 					}
 					charIndex += currentNum.length;
@@ -14935,11 +13753,14 @@ if (_gsScope._gsDefine) { _gsScope._gsQueue.pop()(); } //necessary in case Tween
 				return a;
 			},
 			//note: "funcParam" is only necessary for function-based getters/setters that require an extra parameter like getAttribute("width") and setAttribute("width", value). In this example, funcParam would be "width". Used by AttrPlugin for example.
-			_addPropTween = function(target, prop, start, end, overwriteProp, round, funcParam, stringFilter) {
+			_addPropTween = function(target, prop, start, end, overwriteProp, mod, funcParam, stringFilter, index) {
+				if (typeof(end) === "function") {
+					end = end(index || 0, target);
+				}
 				var s = (start === "get") ? target[prop] : start,
 					type = typeof(target[prop]),
 					isRelative = (typeof(end) === "string" && end.charAt(1) === "="),
-					pt = {t:target, p:prop, s:s, f:(type === "function"), pg:0, n:overwriteProp || prop, r:round, pr:0, c:isRelative ? parseInt(end.charAt(0) + "1", 10) * parseFloat(end.substr(2)) : (parseFloat(end) - s) || 0},
+					pt = {t:target, p:prop, s:s, f:(type === "function"), pg:0, n:overwriteProp || prop, m:(!mod ? 0 : (typeof(mod) === "function") ? mod : Math.round), pr:0, c:isRelative ? parseInt(end.charAt(0) + "1", 10) * parseFloat(end.substr(2)) : (parseFloat(end) - s) || 0},
 					blob, getterName;
 				if (type !== "number") {
 					if (type === "function" && start === "get") {
@@ -14950,7 +13771,7 @@ if (_gsScope._gsDefine) { _gsScope._gsQueue.pop()(); } //necessary in case Tween
 						//a blob (string that has multiple numbers in it)
 						pt.fp = funcParam;
 						blob = _blobDif(s, end, stringFilter || TweenLite.defaultStringFilter, pt);
-						pt = {t:blob, p:"setRatio", s:0, c:1, f:2, pg:0, n:overwriteProp || prop, pr:0}; //"2" indicates it's a Blob property tween. Needed for RoundPropsPlugin for example.
+						pt = {t:blob, p:"setRatio", s:0, c:1, f:2, pg:0, n:overwriteProp || prop, pr:0, m:0}; //"2" indicates it's a Blob property tween. Needed for RoundPropsPlugin for example.
 					} else if (!isRelative) {
 						pt.s = parseFloat(s);
 						pt.c = (parseFloat(end) - pt.s) || 0;
@@ -15139,7 +13960,7 @@ if (_gsScope._gsDefine) { _gsScope._gsQueue.pop()(); } //necessary in case Tween
 				dur = this._duration,
 				immediate = !!v.immediateRender,
 				ease = v.ease,
-				i, initPlugins, pt, p, startVars;
+				i, initPlugins, pt, p, startVars, l;
 			if (v.startAt) {
 				if (this._startAt) {
 					this._startAt.render(-1, true); //if we've run a startAt previously (when the tween instantiated), we should revert it so that the values re-instantiate correctly particularly for relative tweens. Without this, a TweenLite.fromTo(obj, 1, {x:"+=100"}, {x:"-=100"}), for example, would actually jump to +=200 because the startAt would run twice, doubling the relative change.
@@ -15202,14 +14023,14 @@ if (_gsScope._gsDefine) { _gsScope._gsQueue.pop()(); } //necessary in case Tween
 			this._firstPT = null;
 
 			if (this._targets) {
-				i = this._targets.length;
-				while (--i > -1) {
-					if ( this._initProps( this._targets[i], (this._propLookup[i] = {}), this._siblings[i], (op ? op[i] : null)) ) {
+				l = this._targets.length;
+				for (i = 0; i < l; i++) {
+					if ( this._initProps( this._targets[i], (this._propLookup[i] = {}), this._siblings[i], (op ? op[i] : null), i) ) {
 						initPlugins = true;
 					}
 				}
 			} else {
-				initPlugins = this._initProps(this.target, this._propLookup, this._siblings, op);
+				initPlugins = this._initProps(this.target, this._propLookup, this._siblings, op, 0);
 			}
 
 			if (initPlugins) {
@@ -15230,7 +14051,7 @@ if (_gsScope._gsDefine) { _gsScope._gsQueue.pop()(); } //necessary in case Tween
 			this._initted = true;
 		};
 
-		p._initProps = function(target, propLookup, siblings, overwrittenProps) {
+		p._initProps = function(target, propLookup, siblings, overwrittenProps, index) {
 			var p, i, initPlugins, plugin, pt, v;
 			if (target == null) {
 				return false;
@@ -15250,7 +14071,7 @@ if (_gsScope._gsDefine) { _gsScope._gsQueue.pop()(); } //necessary in case Tween
 						this.vars[p] = v = this._swapSelfInParams(v, this);
 					}
 
-				} else if (_plugins[p] && (plugin = new _plugins[p]())._onInitTween(target, this.vars[p], this)) {
+				} else if (_plugins[p] && (plugin = new _plugins[p]())._onInitTween(target, this.vars[p], this, index)) {
 
 					//t - target 		[object]
 					//p - property 		[string]
@@ -15260,7 +14081,8 @@ if (_gsScope._gsDefine) { _gsScope._gsQueue.pop()(); } //necessary in case Tween
 					//n - name			[string]
 					//pg - isPlugin 	[boolean]
 					//pr - priority		[number]
-					this._firstPT = pt = {_next:this._firstPT, t:plugin, p:"setRatio", s:0, c:1, f:1, n:p, pg:1, pr:plugin._priority};
+					//m - mod           [function | 0]
+					this._firstPT = pt = {_next:this._firstPT, t:plugin, p:"setRatio", s:0, c:1, f:1, n:p, pg:1, pr:plugin._priority, m:0};
 					i = plugin._overwriteProps.length;
 					while (--i > -1) {
 						propLookup[plugin._overwriteProps[i]] = this._firstPT;
@@ -15276,16 +14098,16 @@ if (_gsScope._gsDefine) { _gsScope._gsQueue.pop()(); } //necessary in case Tween
 					}
 
 				} else {
-					propLookup[p] = _addPropTween.call(this, target, p, "get", v, p, 0, null, this.vars.stringFilter);
+					propLookup[p] = _addPropTween.call(this, target, p, "get", v, p, 0, null, this.vars.stringFilter, index);
 				}
 			}
 
 			if (overwrittenProps) if (this._kill(overwrittenProps, target)) { //another tween may have tried to overwrite properties of this tween before init() was called (like if two tweens start at the same time, the one created second will run first)
-				return this._initProps(target, propLookup, siblings, overwrittenProps);
+				return this._initProps(target, propLookup, siblings, overwrittenProps, index);
 			}
 			if (this._overwrite > 1) if (this._firstPT) if (siblings.length > 1) if (_applyOverwrite(target, this, propLookup, this._overwrite, siblings)) {
 				this._kill(propLookup, target);
-				return this._initProps(target, propLookup, siblings, overwrittenProps);
+				return this._initProps(target, propLookup, siblings, overwrittenProps, index);
 			}
 			if (this._firstPT) if ((this.vars.lazy !== false && this._duration) || (this.vars.lazy && !this._duration)) { //zero duration tweens don't lazy render by default; everything else does.
 				_lazyLookup[target._gsTweenID] = true;
@@ -15665,7 +14487,7 @@ if (_gsScope._gsDefine) { _gsScope._gsQueue.pop()(); } //necessary in case Tween
 				}, true);
 
 		p = TweenPlugin.prototype;
-		TweenPlugin.version = "1.18.0";
+		TweenPlugin.version = "1.19.0";
 		TweenPlugin.API = 2;
 		p._firstPT = null;
 		p._addTween = _addPropTween;
@@ -15702,11 +14524,17 @@ if (_gsScope._gsDefine) { _gsScope._gsQueue.pop()(); } //necessary in case Tween
 			return false;
 		};
 
-		p._roundProps = function(lookup, value) {
-			var pt = this._firstPT;
+		p._mod = p._roundProps = function(lookup) {
+			var pt = this._firstPT,
+				val;
 			while (pt) {
-				if (lookup[this._propName] || (pt.n != null && lookup[ pt.n.split(this._propName + "_").join("") ])) { //some properties that are very plugin-specific add a prefix named after the _propName plus an underscore, so we need to ignore that extra stuff here.
-					pt.r = value;
+				val = lookup[this._propName] || (pt.n != null && lookup[ pt.n.split(this._propName + "_").join("") ]);
+				if (val && typeof(val) === "function") { //some properties that are very plugin-specific add a prefix named after the _propName plus an underscore, so we need to ignore that extra stuff here.
+					if (pt.f === 2) {
+						pt.t._applyPT.m = val;
+					} else {
+						pt.m = val;
+					}
 				}
 				pt = pt._next;
 			}
@@ -15762,7 +14590,7 @@ if (_gsScope._gsDefine) { _gsScope._gsQueue.pop()(); } //necessary in case Tween
 			var propName = config.propName,
 				priority = config.priority || 0,
 				overwriteProps = config.overwriteProps,
-				map = {init:"_onInitTween", set:"setRatio", kill:"_kill", round:"_roundProps", initAll:"_onInitAllProps"},
+				map = {init:"_onInitTween", set:"setRatio", kill:"_kill", round:"_mod", mod:"_mod", initAll:"_onInitAllProps"},
 				Plugin = _class("plugins." + propName.charAt(0).toUpperCase() + propName.substr(1) + "Plugin",
 					function() {
 						TweenPlugin.call(this, propName, priority);
@@ -15791,7 +14619,7 @@ if (_gsScope._gsDefine) { _gsScope._gsQueue.pop()(); } //necessary in case Tween
 			}
 			for (p in _defLookup) {
 				if (!_defLookup[p].func) {
-					window.console.log("GSAP encountered missing dependency: com.greensock." + p);
+					window.console.log("GSAP encountered missing dependency: " + p);
 				}
 			}
 		}
@@ -15800,8 +14628,6 @@ if (_gsScope._gsDefine) { _gsScope._gsQueue.pop()(); } //necessary in case Tween
 
 })((typeof(module) !== "undefined" && module.exports && typeof(global) !== "undefined") ? global : this || window, "TweenMax");
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{}]},{},[1]);
 
-},{}]},{},[3])
-
-
-//# sourceMappingURL=maps/demo.bundle.js.map
+//# sourceMappingURL=maps/BEATS.js.map
